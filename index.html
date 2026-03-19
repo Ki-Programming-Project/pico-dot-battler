@@ -10,6 +10,7 @@
   v0.1.4 - 2026-03-19 : meta警告修正（mobile-web-app-capable追加）
   v0.1.5 - 2026-03-19 : バグ修正（残機2重減算・敗北落下アニメーション実装）
   v0.1.6 - 2026-03-19 : バグ修正（敗北時スコアゼロ・ランキング未登録）
+  v0.1.7 - 2026-03-20 : バグ修正（バトル画面レイアウト・Canvas初期化タイミング）
 -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -286,20 +287,21 @@ body { display: flex; flex-direction: column; }
 /* ===== バトル画面 ===== */
 #screen-battle {
   padding: 8px; gap: 0; overflow: hidden;
+  display: flex; flex-direction: column; height: 100%;
 }
 .battle-info-bar {
   background: var(--panel); border-radius: 8px; padding: 8px 10px;
   display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
 }
 .battle-hp-row {
-  display: flex; gap: 8px; margin-bottom: 4px;
+  display: flex; gap: 8px; margin-bottom: 4px; flex-shrink: 0;
 }
 .battle-hp-block { flex: 1; }
 .battle-hp-label { font-size: 11px; color: var(--text2); margin-bottom: 2px; display: flex; justify-content: space-between; }
-.battle-sp-row { display: flex; gap: 8px; margin-bottom: 4px; }
+.battle-sp-row { display: flex; gap: 8px; margin-bottom: 4px; flex-shrink: 0; }
 .battle-meta-row {
   display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 6px; padding: 0 4px;
+  margin-bottom: 6px; padding: 0 4px; flex-shrink: 0;
 }
 .battle-lives { display: flex; gap: 4px; }
 .heart { font-size: 16px; color: var(--accent); transition: opacity 0.3s; }
@@ -324,10 +326,10 @@ body { display: flex; flex-direction: column; }
 #battle-canvas { width: 100%; height: 100%; display: block; }
 .battle-skills {
   display: flex; gap: 8px; padding: 8px 0 4px;
-  flex-shrink: 0;
+  flex-shrink: 0; height: 80px;
 }
 .skill-btn {
-  flex: 1; min-height: 60px; border-radius: 8px;
+  flex: 1; height: 100%; border-radius: 8px;
   background: var(--panel2); border: 1px solid var(--border2);
   color: var(--text); font-size: 12px; cursor: pointer;
   display: flex; flex-direction: column; align-items: center;
@@ -1736,17 +1738,16 @@ const Battle = {
     };
 
     App.showScreen('battle');
-    this._initCanvas();
-    this._renderBars();
-    this._renderSkillBtns();
-    this._renderLives();
-    this._updateSpeedBtn();
-
-    // タブバーグレーアウト
-    document.querySelectorAll('.tab-btn').forEach(t => t.classList.add('disabled'));
-
-    // ステージ説明表示
-    this._showStageOverlay(stage);
+    // DOM確定後にCanvas初期化
+    requestAnimationFrame(() => {
+      this._initCanvas();
+      this._renderBars();
+      this._renderSkillBtns();
+      this._renderLives();
+      this._updateSpeedBtn();
+      document.querySelectorAll('.tab-btn').forEach(t => t.classList.add('disabled'));
+      this._showStageOverlay(stage);
+    });
   },
 
   _generateEnemy(battleCount) {
