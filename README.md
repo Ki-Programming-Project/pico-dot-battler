@@ -11,9 +11,11 @@
 
 ## 📱 Play
 
+🎮 **[Play Now](https://ki-programming-project.github.io/pico-dot-battler/) → https://ki-programming-project.github.io/pico-dot-battler/**
+
 Open `index.html` in a mobile browser — no server required.
 
-> スマートフォンのブラウザで `index.html` を開くだけでプレイできます。
+> スマートフォンのブラウザで上記URLを開くだけでプレイできます。
 
 ---
 
