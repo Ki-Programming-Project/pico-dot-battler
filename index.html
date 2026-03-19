@@ -1,0 +1,2504 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<!--
+  Pico Dot Battler
+  v0.1.0 - 2026-03-19 : 初期実装
+-->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<title>Pico Dot Battler</title>
+<style>
+/* ===== CSS変数 ===== */
+:root {
+  --bg: #1a1a2e;
+  --bg2: #16213e;
+  --bg3: #0f3460;
+  --panel: #1e2a4a;
+  --panel2: #253355;
+  --accent: #e94560;
+  --accent2: #f5a623;
+  --accent3: #4ecdc4;
+  --accent4: #a8e063;
+  --text: #f0f0f0;
+  --text2: #a0a8c0;
+  --text3: #606880;
+  --border: #2a3a5c;
+  --border2: #3a4a6c;
+  --tab-h: 64px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --hp-color: #4ecdc4;
+  --sp-color: #f5a623;
+  --enemy-hp: #e94560;
+  --enemy-sp: #c084fc;
+  --normal-color: #a0a8c0;
+  --rare-color: #4ecdc4;
+  --ultra-color: #f5a623;
+  --font-main: 'Courier New', monospace;
+}
+
+/* ===== リセット・基本 ===== */
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--font-main); font-size: 16px; touch-action: manipulation; }
+body { display: flex; flex-direction: column; }
+
+/* ===== トースト通知 ===== */
+#toast {
+  position: fixed; top: 16px; left: 50%; transform: translateX(-50%) translateY(-80px);
+  background: var(--panel2); border: 1px solid var(--border2); border-radius: 8px;
+  padding: 10px 20px; font-size: 14px; color: var(--text); z-index: 9999;
+  transition: transform 0.3s ease; pointer-events: auto; cursor: pointer;
+  white-space: nowrap; max-width: 90vw; text-align: center;
+}
+#toast.show { transform: translateX(-50%) translateY(0); }
+
+/* ===== メインコンテンツエリア ===== */
+#app {
+  flex: 1; overflow: hidden; position: relative;
+  padding-bottom: calc(var(--tab-h) + var(--safe-bottom));
+}
+
+/* ===== 画面共通 ===== */
+.screen {
+  position: absolute; inset: 0;
+  display: none; flex-direction: column;
+  overflow-y: auto; overflow-x: hidden;
+  padding: 12px 12px 4px;
+}
+.screen.active { display: flex; }
+
+/* ===== タブバー ===== */
+#tabbar {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  height: calc(var(--tab-h) + var(--safe-bottom));
+  padding-bottom: var(--safe-bottom);
+  background: var(--bg2); border-top: 1px solid var(--border);
+  display: flex; z-index: 100;
+}
+.tab-btn {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 3px; cursor: pointer;
+  color: var(--text3); font-size: 10px; transition: color 0.2s;
+  user-select: none;
+}
+.tab-btn .tab-icon { font-size: 20px; line-height: 1; }
+.tab-btn.active { color: var(--accent); }
+.tab-btn.disabled { opacity: 0.3; pointer-events: none; }
+
+/* ===== 見出し・ボタン共通 ===== */
+.screen-title {
+  font-size: 20px; font-weight: bold; color: var(--accent);
+  text-align: center; margin-bottom: 12px; letter-spacing: 2px;
+}
+.btn {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 60px; border-radius: 8px; font-size: 16px; font-weight: bold;
+  cursor: pointer; border: none; font-family: var(--font-main);
+  transition: opacity 0.15s, transform 0.1s; user-select: none;
+  letter-spacing: 1px;
+}
+.btn:active { opacity: 0.75; transform: scale(0.97); }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-secondary { background: var(--panel2); color: var(--text); border: 1px solid var(--border2); }
+.btn-accent2 { background: var(--accent2); color: #1a1a2e; }
+.btn-accent3 { background: var(--accent3); color: #1a1a2e; }
+.btn-sm { min-height: 44px; font-size: 14px; padding: 0 16px; }
+.btn:disabled, .btn.disabled { opacity: 0.35; pointer-events: none; }
+
+/* ===== HPバー・SPバー ===== */
+.bar-wrap { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.bar-label { font-size: 11px; color: var(--text2); }
+.bar-track { height: 10px; background: var(--bg3); border-radius: 5px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 5px; transition: width 0.3s ease; }
+.bar-hp .bar-fill { background: var(--hp-color); }
+.bar-sp .bar-fill { background: var(--sp-color); }
+.bar-hp-enemy .bar-fill { background: var(--enemy-hp); }
+.bar-sp-enemy .bar-fill { background: var(--enemy-sp); }
+
+/* ===== タイトル画面 ===== */
+#screen-title {
+  align-items: center; justify-content: center; gap: 20px;
+}
+.title-logo {
+  font-size: 28px; font-weight: bold; color: var(--accent);
+  letter-spacing: 3px; text-align: center; line-height: 1.3;
+  text-shadow: 0 0 20px rgba(233,69,96,0.5);
+}
+.title-sub { font-size: 13px; color: var(--text3); letter-spacing: 2px; }
+.title-pixel-art {
+  width: 80px; height: 80px; image-rendering: pixelated;
+  border: 2px solid var(--border2); border-radius: 8px;
+}
+.title-btns { width: 100%; max-width: 280px; display: flex; flex-direction: column; gap: 12px; }
+
+/* ===== チュートリアル ===== */
+#tutorial-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+  z-index: 500; display: none; flex-direction: column;
+  align-items: center; justify-content: center; padding: 24px;
+}
+#tutorial-overlay.active { display: flex; }
+.tutorial-box {
+  background: var(--panel); border: 1px solid var(--border2);
+  border-radius: 12px; padding: 24px; width: 100%; max-width: 320px;
+  text-align: center;
+}
+.tutorial-step { font-size: 12px; color: var(--text3); margin-bottom: 8px; }
+.tutorial-title { font-size: 20px; color: var(--accent); margin-bottom: 12px; font-weight: bold; }
+.tutorial-desc { font-size: 14px; color: var(--text2); line-height: 1.6; margin-bottom: 20px; }
+.tutorial-btns { display: flex; gap: 10px; }
+.tutorial-skip { position: absolute; top: 16px; right: 16px; font-size: 13px; color: var(--text3); cursor: pointer; padding: 8px; }
+
+/* ===== エディタ画面 ===== */
+#screen-editor { gap: 8px; }
+.editor-name-row { display: flex; gap: 8px; align-items: center; }
+.editor-name-input {
+  flex: 1; background: var(--panel); border: 1px solid var(--border2);
+  color: var(--text); font-family: var(--font-main); font-size: 16px;
+  padding: 10px 12px; border-radius: 8px; outline: none;
+}
+.editor-name-input:focus { border-color: var(--accent3); }
+.editor-help-btn {
+  width: 44px; height: 44px; background: var(--panel2);
+  border: 1px solid var(--border2); border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; cursor: pointer; flex-shrink: 0;
+}
+#editor-canvas-wrap {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  min-height: 0;
+}
+#editor-canvas {
+  image-rendering: pixelated;
+  border: 2px solid var(--border2); border-radius: 4px;
+  touch-action: none; cursor: crosshair;
+}
+.editor-tools { display: flex; gap: 8px; }
+.tool-btn {
+  flex: 1; min-height: 48px; background: var(--panel2);
+  border: 1px solid var(--border2); border-radius: 8px;
+  font-size: 13px; color: var(--text); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  transition: border-color 0.15s;
+}
+.tool-btn.active { border-color: var(--accent3); color: var(--accent3); }
+.palette-wrap {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px;
+}
+.palette-label { font-size: 12px; color: var(--text3); margin-bottom: 8px; }
+.palette-colors { display: flex; flex-wrap: wrap; gap: 6px; }
+.palette-color {
+  width: 36px; height: 36px; border-radius: 4px; cursor: pointer;
+  border: 2px solid transparent; transition: border-color 0.15s, transform 0.1s;
+  flex-shrink: 0;
+}
+.palette-color.active { border-color: #fff; transform: scale(1.15); }
+.palette-color.locked { opacity: 0.3; cursor: not-allowed; position: relative; }
+.editor-actions { display: flex; gap: 8px; }
+.stat-preview {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px; display: flex; gap: 8px; flex-wrap: wrap;
+}
+.stat-chip {
+  font-size: 12px; color: var(--text2);
+  background: var(--bg3); padding: 4px 8px; border-radius: 4px;
+}
+.stat-chip span { color: var(--accent2); font-weight: bold; }
+
+/* ===== 編成画面 ===== */
+#screen-formation { gap: 10px; }
+.char-list-scroll {
+  display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px;
+  scrollbar-width: none;
+}
+.char-list-scroll::-webkit-scrollbar { display: none; }
+.char-card {
+  flex-shrink: 0; width: 80px; background: var(--panel);
+  border: 2px solid var(--border2); border-radius: 8px;
+  padding: 8px; display: flex; flex-direction: column; align-items: center;
+  gap: 6px; cursor: pointer; transition: border-color 0.15s;
+  position: relative;
+}
+.char-card.selected { border-color: var(--accent3); }
+.char-card.favorite::after {
+  content: '★'; position: absolute; top: 4px; right: 4px;
+  font-size: 12px; color: var(--accent2);
+}
+.char-card canvas { image-rendering: pixelated; border-radius: 2px; }
+.char-card-name { font-size: 11px; color: var(--text2); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; }
+.char-card-lv { font-size: 11px; color: var(--accent3); }
+.char-add-btn {
+  flex-shrink: 0; width: 80px; min-height: 100px;
+  background: var(--panel); border: 2px dashed var(--border2);
+  border-radius: 8px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 4px;
+  cursor: pointer; color: var(--text3); font-size: 24px;
+}
+.section-title { font-size: 13px; color: var(--text3); margin-bottom: 6px; letter-spacing: 1px; }
+.stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.stat-row {
+  background: var(--panel); border-radius: 6px; padding: 8px 10px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.stat-name { font-size: 13px; color: var(--text2); }
+.stat-val { font-size: 14px; color: var(--accent2); font-weight: bold; }
+.equip-slots { display: flex; gap: 8px; }
+.equip-slot {
+  flex: 1; min-height: 64px; background: var(--panel);
+  border: 1px solid var(--border2); border-radius: 8px;
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 4px; cursor: pointer;
+  font-size: 12px; color: var(--text3); padding: 8px;
+  position: relative;
+}
+.equip-slot .equip-name { font-size: 11px; color: var(--text); text-align: center; }
+.equip-slot .equip-rarity { font-size: 10px; }
+.rarity-normal { color: var(--normal-color); }
+.rarity-rare { color: var(--rare-color); }
+.rarity-ultra { color: var(--ultra-color); }
+.skill-tree { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+.skill-node {
+  background: var(--panel); border: 1px solid var(--border2);
+  border-radius: 8px; padding: 8px; text-align: center;
+  font-size: 11px; cursor: pointer;
+}
+.skill-node.unlocked { border-color: var(--accent3); color: var(--accent3); }
+.skill-node.locked { opacity: 0.5; }
+.sort-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.sort-btn {
+  font-size: 11px; padding: 4px 10px; background: var(--panel2);
+  border: 1px solid var(--border2); border-radius: 4px; cursor: pointer;
+  color: var(--text2); min-height: 32px;
+}
+.sort-btn.active { border-color: var(--accent3); color: var(--accent3); }
+.formation-actions { display: flex; gap: 8px; margin-top: 4px; }
+
+/* ===== バトル画面 ===== */
+#screen-battle {
+  padding: 8px; gap: 0; overflow: hidden;
+}
+.battle-info-bar {
+  background: var(--panel); border-radius: 8px; padding: 8px 10px;
+  display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+}
+.battle-hp-row {
+  display: flex; gap: 8px; margin-bottom: 4px;
+}
+.battle-hp-block { flex: 1; }
+.battle-hp-label { font-size: 11px; color: var(--text2); margin-bottom: 2px; display: flex; justify-content: space-between; }
+.battle-sp-row { display: flex; gap: 8px; margin-bottom: 4px; }
+.battle-meta-row {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 6px; padding: 0 4px;
+}
+.battle-lives { display: flex; gap: 4px; }
+.heart { font-size: 16px; color: var(--accent); transition: opacity 0.3s; }
+.heart.empty { opacity: 0.2; }
+.battle-turn { font-size: 13px; color: var(--text2); }
+.battle-pause-btn {
+  width: 44px; height: 44px; background: var(--panel2);
+  border: 1px solid var(--border2); border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; cursor: pointer; flex-shrink: 0;
+}
+.battle-speed-btn {
+  min-width: 60px; height: 32px; background: var(--panel2);
+  border: 1px solid var(--border2); border-radius: 6px;
+  font-size: 12px; color: var(--accent2); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+#battle-canvas-wrap {
+  flex: 1; position: relative; overflow: hidden;
+  border-radius: 8px; min-height: 0;
+}
+#battle-canvas { width: 100%; height: 100%; display: block; }
+.battle-skills {
+  display: flex; gap: 8px; padding: 8px 0 4px;
+  flex-shrink: 0;
+}
+.skill-btn {
+  flex: 1; min-height: 60px; border-radius: 8px;
+  background: var(--panel2); border: 1px solid var(--border2);
+  color: var(--text); font-size: 12px; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 2px; transition: all 0.2s;
+  position: relative; overflow: hidden; padding: 4px;
+}
+.skill-btn.ready { border-color: var(--accent2); box-shadow: 0 0 12px rgba(245,166,35,0.4); animation: skillPulse 1s infinite; }
+.skill-btn.locked-skill { opacity: 0.25; pointer-events: none; }
+.skill-btn.cooldown { opacity: 0.5; }
+.skill-btn .cd-text { position: absolute; top: 4px; right: 4px; font-size: 10px; color: var(--accent); }
+@keyframes skillPulse { 0%,100%{box-shadow:0 0 8px rgba(245,166,35,0.4)} 50%{box-shadow:0 0 16px rgba(245,166,35,0.7)} }
+.battle-effect {
+  position: absolute; pointer-events: none; z-index: 10;
+  font-size: 20px; font-weight: bold; text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+  animation: floatUp 0.8s ease-out forwards;
+}
+@keyframes floatUp { 0%{opacity:1;transform:translateY(0) scale(1)} 100%{opacity:0;transform:translateY(-50px) scale(0.7)} }
+.flash-overlay {
+  position: absolute; inset: 0; pointer-events: none; z-index: 20;
+  opacity: 0; border-radius: 8px;
+}
+/* バトル一時停止オーバーレイ */
+#pause-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.8);
+  z-index: 200; display: none; flex-direction: column;
+  align-items: center; justify-content: center; gap: 16px;
+}
+#pause-overlay.active { display: flex; }
+.pause-box {
+  background: var(--panel); border: 1px solid var(--border2);
+  border-radius: 12px; padding: 24px; width: 80%; max-width: 280px;
+  text-align: center;
+}
+.pause-title { font-size: 20px; color: var(--accent2); margin-bottom: 16px; font-weight: bold; }
+/* ステージ説明オーバーレイ */
+#stage-overlay {
+  position: absolute; inset: 0; background: rgba(0,0,0,0.75);
+  z-index: 50; display: none; flex-direction: column;
+  align-items: center; justify-content: center; gap: 8px;
+  border-radius: 8px; cursor: pointer;
+}
+#stage-overlay.active { display: flex; }
+.stage-name { font-size: 24px; font-weight: bold; color: var(--accent2); letter-spacing: 2px; }
+.stage-bonus { font-size: 14px; color: var(--accent3); }
+.stage-gimmick { font-size: 13px; color: var(--text2); }
+.stage-tap { font-size: 12px; color: var(--text3); margin-top: 8px; }
+
+/* ===== リザルト画面 ===== */
+#screen-result { gap: 12px; align-items: center; }
+.result-title { font-size: 24px; font-weight: bold; letter-spacing: 3px; }
+.result-title.win { color: var(--accent2); }
+.result-title.lose { color: var(--accent); }
+.result-score { font-size: 36px; font-weight: bold; color: var(--text); }
+.result-score span { font-size: 16px; color: var(--text3); }
+.result-stats {
+  width: 100%; background: var(--panel); border-radius: 8px; padding: 12px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.result-stat-row { display: flex; justify-content: space-between; font-size: 14px; }
+.result-stat-row .label { color: var(--text2); }
+.result-stat-row .val { color: var(--accent2); font-weight: bold; }
+.result-drops { width: 100%; }
+.drop-list { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.drop-item {
+  background: var(--panel); border-radius: 6px; padding: 6px 10px;
+  font-size: 12px; border-left: 3px solid;
+}
+.result-actions { display: flex; gap: 10px; width: 100%; }
+
+/* ===== ショップ画面 ===== */
+#screen-shop { gap: 10px; }
+.shop-points-bar {
+  background: var(--panel); border-radius: 8px; padding: 10px 16px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.shop-points-label { font-size: 14px; color: var(--text2); }
+.shop-points-val { font-size: 20px; color: var(--accent2); font-weight: bold; }
+.shop-tabs { display: flex; gap: 8px; }
+.shop-tab {
+  flex: 1; min-height: 44px; background: var(--panel2);
+  border: 1px solid var(--border2); border-radius: 8px;
+  font-size: 14px; color: var(--text2); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.shop-tab.active { border-color: var(--accent3); color: var(--accent3); }
+.shop-content { flex: 1; overflow-y: auto; }
+.shop-color-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 4px; }
+.shop-color-item {
+  background: var(--panel); border: 1px solid var(--border2);
+  border-radius: 8px; padding: 12px; display: flex; align-items: center; gap: 10px;
+}
+.shop-color-swatch { width: 36px; height: 36px; border-radius: 6px; flex-shrink: 0; }
+.shop-color-info { flex: 1; }
+.shop-color-name { font-size: 13px; color: var(--text); margin-bottom: 2px; }
+.shop-color-stat { font-size: 11px; color: var(--text3); margin-bottom: 4px; }
+.shop-color-price { font-size: 13px; color: var(--accent2); font-weight: bold; }
+.shop-equip-list { display: flex; flex-direction: column; gap: 8px; padding: 4px; }
+.shop-equip-item {
+  background: var(--panel); border: 1px solid var(--border2);
+  border-radius: 8px; padding: 12px; display: flex; align-items: center; gap: 10px;
+}
+.shop-equip-info { flex: 1; }
+.shop-equip-name { font-size: 14px; color: var(--text); margin-bottom: 2px; }
+.shop-equip-effect { font-size: 12px; color: var(--text3); }
+.shop-equip-price { font-size: 14px; color: var(--accent2); font-weight: bold; }
+.shop-refresh-row { display: flex; justify-content: flex-end; padding: 4px; }
+
+/* ===== ランキング画面 ===== */
+#screen-ranking { gap: 10px; }
+.ranking-list { display: flex; flex-direction: column; gap: 8px; flex: 1; overflow-y: auto; }
+.ranking-item {
+  background: var(--panel); border: 1px solid var(--border2);
+  border-radius: 8px; padding: 10px 12px;
+  display: flex; align-items: center; gap: 10px;
+}
+.rank-num { font-size: 20px; font-weight: bold; color: var(--text3); width: 32px; text-align: center; flex-shrink: 0; }
+.rank-num.gold { color: #ffd700; }
+.rank-num.silver { color: #c0c0c0; }
+.rank-num.bronze { color: #cd7f32; }
+.rank-dot-canvas { image-rendering: pixelated; flex-shrink: 0; border-radius: 2px; }
+.rank-info { flex: 1; }
+.rank-name { font-size: 14px; color: var(--text); margin-bottom: 3px; }
+.rank-score { font-size: 18px; color: var(--accent2); font-weight: bold; }
+.rank-stats { font-size: 11px; color: var(--text3); display: flex; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
+.my-best {
+  background: var(--panel); border: 1px solid var(--accent2);
+  border-radius: 8px; padding: 12px; text-align: center;
+}
+.my-best-label { font-size: 12px; color: var(--text3); margin-bottom: 4px; }
+.my-best-score { font-size: 24px; color: var(--accent2); font-weight: bold; }
+
+/* ===== 装備詳細モーダル ===== */
+#equip-modal {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.8);
+  z-index: 300; display: none; align-items: flex-end; justify-content: center;
+}
+#equip-modal.active { display: flex; }
+.equip-modal-box {
+  background: var(--panel); border: 1px solid var(--border2);
+  border-radius: 12px 12px 0 0; padding: 20px; width: 100%; max-width: 400px;
+}
+.equip-modal-title { font-size: 18px; color: var(--text); margin-bottom: 8px; font-weight: bold; }
+.equip-modal-effect { font-size: 14px; color: var(--text2); margin-bottom: 12px; }
+.equip-modal-compare { display: flex; gap: 12px; margin-bottom: 16px; }
+.equip-compare-col { flex: 1; background: var(--bg3); border-radius: 6px; padding: 8px; }
+.equip-compare-label { font-size: 11px; color: var(--text3); margin-bottom: 4px; }
+.equip-compare-val { font-size: 13px; color: var(--text); }
+.equip-diff-pos { color: #4ecdc4; }
+.equip-diff-neg { color: var(--accent); }
+
+/* ===== 横向き対応 ===== */
+@media (orientation: landscape) {
+  #screen-editor { flex-direction: row; flex-wrap: wrap; }
+  #editor-canvas-wrap { flex: 0 0 auto; }
+  .palette-wrap { flex: 1; min-width: 160px; }
+  #screen-battle { flex-direction: column; }
+}
+
+/* ===== スクロールバー非表示 ===== */
+.screen::-webkit-scrollbar { display: none; }
+.screen { scrollbar-width: none; }
+</style>
+</head>
+<body>
+
+<!-- トースト通知 -->
+<div id="toast"></div>
+
+<!-- メインアプリ -->
+<div id="app">
+
+  <!-- タイトル画面 -->
+  <div id="screen-title" class="screen">
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;">
+      <canvas id="title-canvas" class="title-pixel-art" width="80" height="80"></canvas>
+      <div>
+        <div class="title-logo">PICO DOT<br>BATTLER</div>
+        <div class="title-sub" style="text-align:center;margin-top:6px;">DRAW · RAISE · BATTLE</div>
+      </div>
+      <div class="title-btns">
+        <button class="btn btn-primary" onclick="App.startGame()">▶ START</button>
+        <button class="btn btn-secondary" onclick="App.showScreen('ranking')">🏆 RANKING</button>
+        <button class="btn btn-secondary" onclick="App.showScreen('shop')">🛒 SHOP</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- エディタ画面 -->
+  <div id="screen-editor" class="screen">
+    <div class="editor-name-row">
+      <input type="text" id="editor-name" class="editor-name-input" placeholder="キャラ名" maxlength="12">
+      <div class="editor-help-btn" onclick="Tutorial.show('editor')">？</div>
+    </div>
+    <div id="editor-canvas-wrap">
+      <canvas id="editor-canvas"></canvas>
+    </div>
+    <div class="editor-tools">
+      <div class="tool-btn active" id="tool-pen" onclick="Editor.setTool('pen')">✏️ ペン</div>
+      <div class="tool-btn" id="tool-eraser" onclick="Editor.setTool('eraser')">🧹 消し</div>
+      <div class="tool-btn" id="tool-fill" onclick="Editor.setTool('fill')">🪣 塗り</div>
+      <div class="tool-btn" onclick="Editor.undo()">↩ 戻す</div>
+      <div class="tool-btn" onclick="Editor.clear()">🗑 消去</div>
+    </div>
+    <div class="palette-wrap">
+      <div class="palette-label">カラーパレット</div>
+      <div class="palette-colors" id="palette-colors"></div>
+    </div>
+    <div id="stat-preview" class="stat-preview"></div>
+    <div class="editor-actions">
+      <button class="btn btn-secondary" style="flex:1;" onclick="Editor.newChar()">新規</button>
+      <button class="btn btn-accent3" style="flex:2;" onclick="Editor.saveChar()">保存</button>
+    </div>
+  </div>
+
+  <!-- 編成画面 -->
+  <div id="screen-formation" class="screen">
+    <div class="screen-title">FORMATION</div>
+    <div class="sort-row">
+      <span style="font-size:12px;color:var(--text3);">並び順:</span>
+      <div class="sort-btn active" onclick="Formation.setSort('name_asc')" data-sort="name_asc">名前↑</div>
+      <div class="sort-btn" onclick="Formation.setSort('name_desc')" data-sort="name_desc">名前↓</div>
+      <div class="sort-btn" onclick="Formation.setSort('level_desc')" data-sort="level_desc">LV↓</div>
+      <div class="sort-btn" onclick="Formation.setSort('created_desc')" data-sort="created_desc">新↓</div>
+      <div class="sort-btn" onclick="Formation.setSort('fav')" data-sort="fav">★</div>
+    </div>
+    <div class="char-list-scroll" id="char-list"></div>
+    <div id="formation-detail" style="display:none;flex-direction:column;gap:10px;flex:1;">
+      <div class="section-title">STATS</div>
+      <div class="stats-grid" id="formation-stats"></div>
+      <div class="section-title">EQUIP</div>
+      <div class="equip-slots" id="equip-slots"></div>
+      <div class="section-title">SKILL TREE</div>
+      <div class="skill-tree" id="skill-tree"></div>
+      <div class="formation-actions">
+        <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="Formation.duplicateChar()">複製</button>
+        <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="Formation.toggleFavorite()">★お気に入り</button>
+        <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="Formation.deleteChar()">削除</button>
+      </div>
+    </div>
+    <button class="btn btn-primary" id="battle-start-btn" onclick="Battle.start()" style="margin-top:auto;">⚔ 出撃！</button>
+  </div>
+
+  <!-- バトル画面 -->
+  <div id="screen-battle" class="screen">
+    <div class="battle-hp-row">
+      <div class="battle-hp-block">
+        <div class="battle-hp-label">
+          <span id="enemy-name-label">ENEMY</span>
+          <span id="enemy-hp-text">--/--</span>
+        </div>
+        <div class="bar-track bar-hp-enemy"><div class="bar-fill" id="enemy-hp-bar" style="width:100%"></div></div>
+      </div>
+      <div style="width:8px;"></div>
+      <div class="battle-hp-block">
+        <div class="battle-hp-label">
+          <span id="player-name-label">PLAYER</span>
+          <span id="player-hp-text">--/--</span>
+        </div>
+        <div class="bar-track bar-hp"><div class="bar-fill" id="player-hp-bar" style="width:100%"></div></div>
+      </div>
+    </div>
+    <div class="battle-sp-row">
+      <div class="battle-hp-block">
+        <div class="bar-track bar-sp-enemy" style="height:8px;"><div class="bar-fill" id="enemy-sp-bar" style="width:0%"></div></div>
+      </div>
+      <div style="width:8px;"></div>
+      <div class="battle-hp-block">
+        <div class="bar-track bar-sp" style="height:8px;"><div class="bar-fill" id="player-sp-bar" style="width:0%"></div></div>
+      </div>
+    </div>
+    <div class="battle-meta-row">
+      <div class="battle-lives" id="player-lives"></div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="battle-speed-btn" id="speed-btn" onclick="Battle.cycleSpeed()">×1</div>
+        <div class="battle-turn" id="turn-counter">T:0</div>
+      </div>
+      <div class="battle-pause-btn" onclick="Battle.pause()">⏸</div>
+    </div>
+    <div id="battle-canvas-wrap">
+      <canvas id="battle-canvas"></canvas>
+      <div class="flash-overlay" id="flash-overlay"></div>
+      <div id="stage-overlay" class="screen" onclick="Battle.skipStageOverlay()">
+        <div class="stage-name" id="stage-name-text"></div>
+        <div class="stage-bonus" id="stage-bonus-text"></div>
+        <div class="stage-gimmick" id="stage-gimmick-text"></div>
+        <div class="stage-tap">TAP TO SKIP</div>
+      </div>
+    </div>
+    <div class="battle-skills" id="battle-skills"></div>
+  </div>
+
+  <!-- リザルト画面 -->
+  <div id="screen-result" class="screen">
+    <div class="result-title" id="result-title">VICTORY!</div>
+    <canvas id="result-char-canvas" width="64" height="64" style="image-rendering:pixelated;border-radius:4px;border:2px solid var(--border2);"></canvas>
+    <div class="result-score"><span>SCORE </span><span id="result-score-val">0</span></div>
+    <div class="result-stats" id="result-stats"></div>
+    <div class="result-drops" id="result-drops"></div>
+    <div class="result-actions">
+      <button class="btn btn-secondary" style="flex:1;" onclick="App.showScreen('formation')">編成へ</button>
+      <button class="btn btn-primary" style="flex:2;" onclick="Battle.start()">再挑戦！</button>
+    </div>
+  </div>
+
+  <!-- ショップ画面 -->
+  <div id="screen-shop" class="screen">
+    <div class="screen-title">SHOP</div>
+    <div class="shop-points-bar">
+      <span class="shop-points-label">所持ポイント</span>
+      <span class="shop-points-val" id="shop-points">0 pt</span>
+    </div>
+    <div class="shop-tabs">
+      <div class="shop-tab active" onclick="Shop.setTab('color')" id="shop-tab-color">🎨 カラー</div>
+      <div class="shop-tab" onclick="Shop.setTab('equip')" id="shop-tab-equip">⚔ 装備</div>
+      <div class="shop-tab" onclick="Shop.setTab('item')" id="shop-tab-item">💎 アイテム</div>
+    </div>
+    <div class="shop-content" id="shop-content"></div>
+    <div class="shop-refresh-row" id="shop-refresh-row"></div>
+  </div>
+
+  <!-- ランキング画面 -->
+  <div id="screen-ranking" class="screen">
+    <div class="screen-title">RANKING</div>
+    <div class="ranking-list" id="ranking-list"></div>
+    <div class="my-best" id="my-best">
+      <div class="my-best-label">PERSONAL BEST</div>
+      <div class="my-best-score" id="my-best-score">---</div>
+    </div>
+  </div>
+
+</div><!-- #app -->
+
+<!-- タブバー -->
+<div id="tabbar">
+  <div class="tab-btn active" data-screen="title" onclick="App.showScreen('title')">
+    <span class="tab-icon">🏠</span><span>HOME</span>
+  </div>
+  <div class="tab-btn" data-screen="editor" onclick="App.showScreen('editor')">
+    <span class="tab-icon">✏️</span><span>EDIT</span>
+  </div>
+  <div class="tab-btn" data-screen="formation" onclick="App.showScreen('formation')">
+    <span class="tab-icon">👥</span><span>TEAM</span>
+  </div>
+  <div class="tab-btn" data-screen="ranking" onclick="App.showScreen('ranking')">
+    <span class="tab-icon">🏆</span><span>RANK</span>
+  </div>
+  <div class="tab-btn" data-screen="shop" onclick="App.showScreen('shop')">
+    <span class="tab-icon">🛒</span><span>SHOP</span>
+  </div>
+</div>
+
+<!-- 一時停止オーバーレイ -->
+<div id="pause-overlay">
+  <div class="pause-box">
+    <div class="pause-title">⏸ PAUSE</div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <button class="btn btn-accent2" onclick="Battle.resume()">▶ 再開</button>
+      <button class="btn btn-secondary" onclick="Battle.abandon()">タイトルへ（スコアなし）</button>
+    </div>
+  </div>
+</div>
+
+<!-- 装備モーダル -->
+<div id="equip-modal">
+  <div class="equip-modal-box" id="equip-modal-content"></div>
+</div>
+
+<!-- チュートリアル -->
+<div id="tutorial-overlay">
+  <div class="tutorial-skip" onclick="Tutorial.skip()">SKIP ✕</div>
+  <div class="tutorial-box">
+    <div class="tutorial-step" id="tut-step">STEP 1 / 3</div>
+    <div class="tutorial-title" id="tut-title"></div>
+    <div class="tutorial-desc" id="tut-desc"></div>
+    <div class="tutorial-btns">
+      <button class="btn btn-secondary" style="flex:1;" onclick="Tutorial.prev()" id="tut-prev">◀</button>
+      <button class="btn btn-primary" style="flex:2;" onclick="Tutorial.next()" id="tut-next">次へ ▶</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ================================================
+// BALANCE CONSTANTS
+// ================================================
+const BALANCE = {
+  dmgVariance: 0.10,
+  critMultiplier: 1.5,
+  critMaxRate: 0.50,
+  defReduction: 0.5,
+  baseMultiplier: 1.5,
+  maxLevel: 50,
+  evolveLevel: 20,
+  maxTurns: 100,
+  lifeCount: 3,
+  maxPoints: 9999,
+  shopRefreshCost: 50,
+  evolveItemCost: 500,
+  skillUnlockLv: [0, 5, 10],
+  turnBonus: [[20, 2.0], [40, 1.5]],
+  winStreakMax: 2.0,
+  diffCoeff: [[5, 1.0], [15, 1.5]],
+  speedSteps: [1, 2, 4],
+  colorCoeff: {
+    white: { stat: 'sp', v: 0.5 },
+    black: { stat: 'def', v: 0.8 },
+    red:   { stat: 'atk', v: 1.5 },
+    blue:  { stat: 'def', v: 1.2 },
+    green: { stat: 'hp',  v: 3.0 },
+    yellow:{ stat: 'sp',  v: 0.8 },
+    orange:{ stat: 'atk', v: 1.3 },
+    cyan:  { stat: 'def', v: 1.0 },
+    purple:{ stat: 'spd', v: 1.0 },
+    pink:  { stat: 'spd', v: 1.0 },
+    gray:  { stat: null,  v: 0.3 },
+    skin:  { stat: null,  v: 0.3 },
+    brown: { stat: 'def', v: 0.6 },
+    gold:  { stat: null,  v: 0.5 },
+  },
+  paletteColors: [
+    { id: 'white',  hex: '#f0f0f0', name: '白', price: 0,   stat: 'SP回復', initial: true },
+    { id: 'black',  hex: '#1a1a2e', name: '黒', price: 0,   stat: 'DEF',   initial: true },
+    { id: 'red',    hex: '#e94560', name: '赤', price: 0,   stat: 'ATK',   initial: true },
+    { id: 'blue',   hex: '#3a7bd5', name: '青', price: 0,   stat: 'DEF',   initial: true },
+    { id: 'green',  hex: '#4ecdc4', name: '緑', price: 50,  stat: 'HP'    },
+    { id: 'yellow', hex: '#f5e642', name: '黄', price: 50,  stat: 'SP回復' },
+    { id: 'orange', hex: '#f5a623', name: '橙', price: 80,  stat: 'ATK'   },
+    { id: 'cyan',   hex: '#00cfff', name: '水色', price: 80, stat: 'DEF'  },
+    { id: 'purple', hex: '#a855f7', name: '紫', price: 120, stat: 'SPD'   },
+    { id: 'pink',   hex: '#f472b6', name: 'ピンク', price: 120, stat: 'SPD' },
+    { id: 'gray',   hex: '#6b7280', name: '灰', price: 30,  stat: 'バランス' },
+    { id: 'skin',   hex: '#fbbf8c', name: '肌色', price: 30, stat: 'バランス' },
+    { id: 'brown',  hex: '#92400e', name: '茶', price: 60,  stat: 'DEF'   },
+    { id: 'gold',   hex: '#ffd700', name: '金', price: 200, stat: '全ステ' },
+  ],
+  stages: [
+    { id: 'field',  name: '草原',  bonus: 'HP+10%',  bonusStat: 'hp',  bonusVal: 0.1, gimmick: 'なし', gimmickInterval: 0, gimmickDmg: 0, dropStat: 'hp',  bg: ['#4ecdc4','#87ceeb','#228b22'] },
+    { id: 'cave',   name: '洞窟',  bonus: 'DEF+10%', bonusStat: 'def', bonusVal: 0.1, gimmick: '毎5T落石（全体5ダメ）', gimmickInterval: 5, gimmickDmg: 5, dropStat: 'def', bg: ['#2a2a3e','#4a4a6e','#1a1a2e'] },
+    { id: 'castle', name: '城',    bonus: 'ATK+10%', bonusStat: 'atk', bonusVal: 0.1, gimmick: 'なし', gimmickInterval: 0, gimmickDmg: 0, dropStat: 'atk', bg: ['#6b7280','#9ca3af','#374151'] },
+    { id: 'beach',  name: '海岸',  bonus: 'SPD+10%', bonusStat: 'spd', bonusVal: 0.1, gimmick: '毎3T波（SP+20%）', gimmickInterval: 3, gimmickDmg: 0, dropStat: 'spd', bg: ['#f5a623','#60a5fa','#fbbf8c'] },
+    { id: 'volcano',name: '火山',  bonus: 'ATK+15%', bonusStat: 'atk', bonusVal: 0.15, gimmick: '毎4T噴火（両者5ダメ）', gimmickInterval: 4, gimmickDmg: 5, dropStat: 'sp', bg: ['#e94560','#f5a623','#1a1a2e'] },
+  ],
+  skillSets: {
+    atk: [
+      { name: '強攻撃', type: 'atk', mult: 2.5, spCost: 3, cooldown: 3 },
+      { name: '連続攻撃', type: 'atk', mult: 1.2, hits: 3, spCost: 4, cooldown: 4 },
+      { name: '必殺技', type: 'atk', mult: 4.0, spCost: 6, cooldown: 6 },
+    ],
+    def: [
+      { name: '防御バフ', type: 'def', turns: 2, spCost: 3, cooldown: 4 },
+      { name: 'カウンター', type: 'counter', spCost: 3, cooldown: 4 },
+      { name: '無敵', type: 'invincible', turns: 1, spCost: 5, cooldown: 6 },
+    ],
+    hp: [
+      { name: '回復30%', type: 'heal', rate: 0.3, spCost: 3, cooldown: 4 },
+      { name: 'HP吸収', type: 'drain', mult: 1.5, spCost: 4, cooldown: 4 },
+      { name: '完全回復', type: 'fullheal', spCost: 6, cooldown: 8 },
+    ],
+    spd: [
+      { name: '先制攻撃', type: 'atk', mult: 2.0, priority: true, spCost: 3, cooldown: 3 },
+      { name: '2連行動', type: 'double', spCost: 4, cooldown: 5 },
+      { name: '回避バフ', type: 'evade', turns: 2, spCost: 4, cooldown: 5 },
+    ],
+    sp: [
+      { name: 'SP全回復', type: 'spfull', spCost: 0, cooldown: 5 },
+      { name: '全能力バフ', type: 'allbuff', turns: 2, spCost: 4, cooldown: 6 },
+      { name: 'SP消費なし', type: 'nocost', turns: 3, spCost: 3, cooldown: 7 },
+    ],
+  },
+};
+
+// ================================================
+// STORAGE
+// ================================================
+const Storage = {
+  keys: { chars: 'pdb_chars', ranking: 'pdb_ranking', shop: 'pdb_shop', tutorial: 'pdb_tutorial' },
+  get(key) {
+    try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; }
+    catch(e) { App.showError('データ読み込みエラー: ' + e.message); return null; }
+  },
+  set(key, val) {
+    try { localStorage.setItem(key, JSON.stringify(val)); return true; }
+    catch(e) {
+      if (e.name === 'QuotaExceededError') App.showError('保存容量が不足しています。不要なデータを削除してください。');
+      else App.showError('保存エラー: ' + e.message);
+      return false;
+    }
+  },
+  getChars()    { return this.get(this.keys.chars) || []; },
+  saveChars(c)  { return this.set(this.keys.chars, c); },
+  getRanking()  { return this.get(this.keys.ranking) || []; },
+  saveRanking(r){ return this.set(this.keys.ranking, r); },
+  getShop()     {
+    return this.get(this.keys.shop) || {
+      points: 0, unlockedColors: ['white','black','red','blue'], equipStock: [], evolveStones: 0
+    };
+  },
+  saveShop(s)   { return this.set(this.keys.shop, s); },
+  getTutorial() { return this.get(this.keys.tutorial) || { done: false, step: 0 }; },
+  saveTutorial(t){ return this.set(this.keys.tutorial, t); },
+};
+
+// ================================================
+// UTILS
+// ================================================
+const Utils = {
+  rand(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; },
+  clamp(v, min, max) { return Math.max(min, Math.min(max, v)); },
+  colorNameMap: {
+    atk: '攻撃力', def: '防御力', hp: 'HP', spd: '速度', sp: 'SP回復'
+  },
+  // ドット絵データ(256要素 colorId配列)からステータスを計算
+  calcStats(pixels) {
+    const counts = {};
+    for (const c of pixels) { if (c && c !== 'transparent') counts[c] = (counts[c] || 0) + 1; }
+    const totalFilled = Object.values(counts).reduce((s, v) => s + v, 0);
+    if (totalFilled === 0) return { atk:10, def:10, hp:50, spd:10, sp:10 };
+    const baseMultiplier = (totalFilled / 256) * BALANCE.baseMultiplier;
+    const stats = { atk:0, def:0, hp:0, spd:0, sp:0 };
+    const kinds = Object.keys(counts).length;
+    for (const [colorId, cnt] of Object.entries(counts)) {
+      const cc = BALANCE.colorCoeff[colorId];
+      if (!cc || !cc.stat) continue;
+      stats[cc.stat] += kinds * cnt * cc.v * baseMultiplier;
+    }
+    for (const k of Object.keys(stats)) stats[k] = Math.max(10, Math.round(stats[k]));
+    return stats;
+  },
+  // 最高ステータスのキーを返す
+  topStat(stats) {
+    const keys = ['atk','def','hp','spd','sp'];
+    return keys.reduce((a, b) => stats[a] > stats[b] ? a : b);
+  },
+  // 自動命名
+  autoName(pixels) {
+    const counts = {};
+    for (const c of pixels) { if (c && c !== 'transparent') counts[c] = (counts[c] || 0) + 1; }
+    const top = Object.entries(counts).sort((a,b)=>b[1]-a[1])[0];
+    const colorWord = { red:'レッド', blue:'ブルー', green:'グリーン', yellow:'イエロー',
+      orange:'オレンジ', purple:'パープル', pink:'ピンク', cyan:'シアン', white:'ホワイト',
+      black:'ブラック', gray:'グレー', skin:'スキン', brown:'ブラウン', gold:'ゴールド' };
+    const bodyWords = ['ナイト','ドラゴン','ウィザード','ゴーレム','フォックス','スピリット','デーモン','エンジェル'];
+    const c = top ? (colorWord[top[0]] || 'ミスト') : 'ミスト';
+    const b = bodyWords[Math.floor(Math.random() * bodyWords.length)];
+    return c + b;
+  },
+  // ドット絵をCanvasに描画
+  drawPixels(ctx, pixels, dotSize, gridW, gridH) {
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    for (let i = 0; i < gridW * gridH; i++) {
+      const c = pixels[i];
+      if (!c || c === 'transparent') continue;
+      const pc = BALANCE.paletteColors.find(p => p.id === c);
+      if (!pc) continue;
+      const x = (i % gridW) * dotSize;
+      const y = Math.floor(i / gridW) * dotSize;
+      ctx.fillStyle = pc.hex;
+      ctx.fillRect(x, y, dotSize, dotSize);
+    }
+  },
+  // スキルセットを取得
+  getSkills(stats) {
+    const top = this.topStat(stats);
+    return BALANCE.skillSets[top] || BALANCE.skillSets.atk;
+  },
+  // 経験値計算
+  calcExp(enemyStats, battleCount) {
+    const avg = (enemyStats.atk + enemyStats.def + enemyStats.hp + enemyStats.spd) / 4;
+    const coeff = battleCount <= 5 ? 1.0 : battleCount <= 15 ? 1.5 : 2.0;
+    return Math.round(avg * coeff);
+  },
+  // レベルアップに必要な経験値
+  expToLevel(lv) { return lv * 30 + 50; },
+  // スコア計算
+  calcScore(kills, remainHpRate, turns, winStreak) {
+    let tBonus = 1.0;
+    for (const [t, b] of BALANCE.turnBonus) { if (turns <= t) { tBonus = b; break; } }
+    const streakMult = Math.min(BALANCE.winStreakMax, 1.0 + winStreak * 0.1);
+    return Math.round(kills * remainHpRate * tBonus * streakMult);
+  },
+};
+
+// ================================================
+// SAMPLE CHARACTER (固定ドット絵・赤青人型)
+// ================================================
+const SAMPLE_CHAR = (() => {
+  const p = Array(256).fill('transparent');
+  // 頭
+  for (const i of [34,35,36,37,38,39,50,51,52,53,54,55]) p[i] = 'red';
+  // 目
+  p[52] = 'white'; p[53] = 'white';
+  // 胴体
+  for (const i of [66,67,68,69,70,71,82,83,84,85,86,87,98,99,100,101,102,103]) p[i] = 'blue';
+  // 腕
+  for (const i of [80,81,88,89,96,97,104,105]) p[i] = 'red';
+  // 脚
+  for (const i of [114,115,116,117,118,119,130,131,132,133,134,135,146,147,150,151]) p[i] = 'blue';
+  return {
+    id: 'sample', name: 'ピクセル',
+    pixels: p,
+    stats: Utils.calcStats(p),
+    level: 1, exp: 0,
+    equip: { weapon: null, armor: null, accessory: null },
+    unlockedSkills: [0],
+    favorite: false,
+    createdAt: Date.now() - 1,
+  };
+})();
+
+// ================================================
+// APP CORE
+// ================================================
+const App = {
+  currentScreen: 'title',
+  init() {
+    // サンプルキャラ初期配置
+    let chars = Storage.getChars();
+    if (!chars.find(c => c.id === 'sample')) {
+      chars.unshift(SAMPLE_CHAR);
+      Storage.saveChars(chars);
+    }
+    // ポイント初期チェック
+    const shop = Storage.getShop();
+    const tut = Storage.getTutorial();
+    if (!tut.done && shop.points === 0) {
+      // チュートリアル未完了なら100ptは完了時に付与
+    }
+    this.showScreen('title');
+    TitleScreen.render();
+    // チュートリアル
+    if (!tut.done) setTimeout(() => Tutorial.show('main'), 500);
+  },
+  showScreen(name) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    const el = document.getElementById('screen-' + name);
+    if (el) el.classList.add('active');
+    this.currentScreen = name;
+    // タブ更新
+    document.querySelectorAll('.tab-btn').forEach(t => {
+      t.classList.toggle('active', t.dataset.screen === name);
+    });
+    // 画面別初期化
+    if (name === 'editor') Editor.refresh();
+    if (name === 'formation') Formation.render();
+    if (name === 'ranking') Ranking.render();
+    if (name === 'shop') Shop.render();
+  },
+  startGame() { this.showScreen('formation'); },
+  showError(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = '⚠ ' + msg;
+    el.style.background = 'var(--accent)';
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 4000);
+    el.onclick = () => el.classList.remove('show');
+  },
+  toast(msg, color) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.style.background = color || 'var(--panel2)';
+    el.classList.add('show');
+    clearTimeout(this._toastTimer);
+    this._toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+    el.onclick = () => el.classList.remove('show');
+  },
+};
+
+// ================================================
+// TUTORIAL
+// ================================================
+const Tutorial = {
+  steps: [
+    { title: 'ドット絵を描こう', desc: '16×16のグリッドにタッチして描きます。色は下のパレットで選べます。描いたキャラが自分の戦士になります！' },
+    { title: '色がステータスになる', desc: '赤→ATK（攻撃力）\n青→DEF（防御力）\n緑→HP\n紫・ピンク→SPD（速度）\n黄・白→SP回復速度\n色を塗るほど強くなります！' },
+    { title: 'スキルでバトル！', desc: 'バトルは自動進行。SPゲージが満タンになったらスキルボタンをタップして発動！ステージの特性も活かそう。' },
+  ],
+  _step: 0,
+  _context: 'main',
+  show(context) {
+    this._context = context;
+    this._step = 0;
+    this._update();
+    document.getElementById('tutorial-overlay').classList.add('active');
+  },
+  _update() {
+    const s = this.steps[this._step];
+    document.getElementById('tut-step').textContent = `STEP ${this._step+1} / ${this.steps.length}`;
+    document.getElementById('tut-title').textContent = s.title;
+    document.getElementById('tut-desc').textContent = s.desc;
+    document.getElementById('tut-prev').style.display = this._step === 0 ? 'none' : '';
+    const nextBtn = document.getElementById('tut-next');
+    nextBtn.textContent = this._step === this.steps.length - 1 ? '完了！' : '次へ ▶';
+    // スキップボタンは最初のステップ後に表示
+    document.querySelector('.tutorial-skip').style.display = this._step > 0 ? '' : 'none';
+  },
+  next() {
+    if (this._step < this.steps.length - 1) {
+      this._step++;
+      this._update();
+    } else {
+      this._complete();
+    }
+  },
+  prev() {
+    if (this._step > 0) { this._step--; this._update(); }
+  },
+  skip() {
+    if (this._step === 0) return;
+    this._complete();
+  },
+  _complete() {
+    document.getElementById('tutorial-overlay').classList.remove('active');
+    const tut = Storage.getTutorial();
+    if (!tut.done) {
+      tut.done = true;
+      Storage.saveTutorial(tut);
+      // 初回完了100pt付与
+      const shop = Storage.getShop();
+      shop.points = Math.min(BALANCE.maxPoints, shop.points + 100);
+      Storage.saveShop(shop);
+      App.toast('チュートリアル完了！100pt獲得！', 'var(--accent2)');
+    }
+  },
+};
+
+// ================================================
+// TITLE SCREEN
+// ================================================
+const TitleScreen = {
+  render() {
+    const canvas = document.getElementById('title-canvas');
+    const ctx = canvas.getContext('2d');
+    Utils.drawPixels(ctx, SAMPLE_CHAR.pixels, 5, 16, 16);
+  },
+};
+
+// ================================================
+// EDITOR
+// ================================================
+const Editor = {
+  GRID: 16,
+  pixels: Array(256).fill('transparent'),
+  history: [],
+  tool: 'pen',
+  selectedColor: 'red',
+  editingId: null,
+  _drawing: false,
+  _canvas: null,
+  _ctx: null,
+  _dotSize: 20,
+
+  init() {
+    this._canvas = document.getElementById('editor-canvas');
+    this._ctx = this._canvas.getContext('2d');
+    this._calcSize();
+    this._bindEvents();
+    this.newChar();
+  },
+
+  _calcSize() {
+    const wrap = document.getElementById('editor-canvas-wrap');
+    const available = Math.min(wrap.clientWidth || 300, wrap.clientHeight || 320, 320);
+    this._dotSize = Math.floor(available / this.GRID);
+    const size = this._dotSize * this.GRID;
+    this._canvas.width = size;
+    this._canvas.height = size;
+  },
+
+  _bindEvents() {
+    const c = this._canvas;
+    const getPos = (e) => {
+      const rect = c.getBoundingClientRect();
+      const touch = e.touches ? e.touches[0] : e;
+      const x = Math.floor((touch.clientX - rect.left) / (rect.width / this.GRID));
+      const y = Math.floor((touch.clientY - rect.top) / (rect.height / this.GRID));
+      return { x: Utils.clamp(x, 0, this.GRID-1), y: Utils.clamp(y, 0, this.GRID-1) };
+    };
+    const paint = (e) => {
+      e.preventDefault();
+      if (!this._drawing) return;
+      const { x, y } = getPos(e);
+      const idx = y * this.GRID + x;
+      if (this.tool === 'eraser') {
+        if (this.pixels[idx] !== 'transparent') { this.pixels[idx] = 'transparent'; this._drawGrid(); this._updatePreview(); }
+      } else if (this.tool === 'pen') {
+        if (this.pixels[idx] !== this.selectedColor) { this.pixels[idx] = this.selectedColor; this._drawGrid(); this._updatePreview(); }
+      }
+    };
+    c.addEventListener('mousedown', (e) => { this._saveHistory(); this._drawing = true; paint(e); });
+    c.addEventListener('mousemove', paint);
+    c.addEventListener('mouseup', () => { this._drawing = false; });
+    c.addEventListener('touchstart', (e) => { this._saveHistory(); this._drawing = true; paint(e); }, { passive: false });
+    c.addEventListener('touchmove', paint, { passive: false });
+    c.addEventListener('touchend', () => { this._drawing = false; });
+
+    c.addEventListener('click', (e) => {
+      if (this.tool === 'fill') {
+        const { x, y } = getPos(e);
+        this._saveHistory();
+        this._fill(x, y, this.pixels[y * this.GRID + x], this.selectedColor);
+        this._drawGrid(); this._updatePreview();
+      }
+    });
+  },
+
+  _fill(x, y, targetColor, fillColor) {
+    if (targetColor === fillColor) return;
+    const stack = [[x, y]];
+    while (stack.length) {
+      const [cx, cy] = stack.pop();
+      if (cx < 0 || cy < 0 || cx >= this.GRID || cy >= this.GRID) continue;
+      const idx = cy * this.GRID + cx;
+      if (this.pixels[idx] !== targetColor) continue;
+      this.pixels[idx] = fillColor;
+      stack.push([cx+1,cy],[cx-1,cy],[cx,cy+1],[cx,cy-1]);
+    }
+  },
+
+  _saveHistory() {
+    this.history.push([...this.pixels]);
+    if (this.history.length > 10) this.history.shift();
+  },
+
+  _drawGrid() {
+    const ctx = this._ctx;
+    const ds = this._dotSize;
+    ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
+    // 背景チェッカー
+    for (let y = 0; y < this.GRID; y++) {
+      for (let x = 0; x < this.GRID; x++) {
+        ctx.fillStyle = (x + y) % 2 === 0 ? '#2a2a3e' : '#1e1e2e';
+        ctx.fillRect(x * ds, y * ds, ds, ds);
+      }
+    }
+    // ピクセル
+    Utils.drawPixels(ctx, this.pixels, ds, this.GRID, this.GRID);
+    // グリッド線
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    ctx.lineWidth = 0.5;
+    for (let i = 0; i <= this.GRID; i++) {
+      ctx.beginPath(); ctx.moveTo(i * ds, 0); ctx.lineTo(i * ds, this.GRID * ds); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, i * ds); ctx.lineTo(this.GRID * ds, i * ds); ctx.stroke();
+    }
+  },
+
+  _updatePreview() {
+    const stats = Utils.calcStats(this.pixels);
+    const el = document.getElementById('stat-preview');
+    el.innerHTML = Object.entries(stats).map(([k,v]) =>
+      `<div class="stat-chip">${Utils.colorNameMap[k]||k} <span>${v}</span></div>`
+    ).join('');
+  },
+
+  setTool(t) {
+    this.tool = t;
+    document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+    const el = document.getElementById('tool-' + t);
+    if (el) el.classList.add('active');
+  },
+
+  undo() {
+    if (!this.history.length) return;
+    this.pixels = this.history.pop();
+    this._drawGrid(); this._updatePreview();
+  },
+
+  clear() {
+    if (!confirm('キャンバスをクリアしますか？')) return;
+    this._saveHistory();
+    this.pixels = Array(256).fill('transparent');
+    this._drawGrid(); this._updatePreview();
+  },
+
+  newChar() {
+    this.editingId = null;
+    this.pixels = Array(256).fill('transparent');
+    this.history = [];
+    document.getElementById('editor-name').value = '';
+    this._calcSize();
+    this._drawGrid();
+    this._updatePreview();
+  },
+
+  loadChar(char) {
+    this.editingId = char.id;
+    this.pixels = [...char.pixels];
+    this.history = [];
+    document.getElementById('editor-name').value = char.name;
+    this._calcSize();
+    this._drawGrid();
+    this._updatePreview();
+  },
+
+  saveChar() {
+    const pixels = [...this.pixels];
+    const filled = pixels.filter(c => c !== 'transparent').length;
+    if (filled === 0) { App.toast('何か描いてから保存してください', 'var(--accent)'); return; }
+
+    let name = document.getElementById('editor-name').value.trim();
+    if (!name) name = Utils.autoName(pixels);
+
+    const chars = Storage.getChars();
+    const stats = Utils.calcStats(pixels);
+
+    if (this.editingId) {
+      const idx = chars.findIndex(c => c.id === this.editingId);
+      if (idx >= 0) {
+        chars[idx].pixels = pixels;
+        chars[idx].name = name;
+        chars[idx].stats = stats;
+      }
+    } else {
+      const maxSlots = Storage.getShop().maxSlots || 5;
+      if (chars.length >= maxSlots) {
+        App.toast(`キャラ上限(${maxSlots}体)です。削除してから作成してください`, 'var(--accent)');
+        return;
+      }
+      chars.push({
+        id: 'c' + Date.now(),
+        name, pixels, stats,
+        level: 1, exp: 0,
+        equip: { weapon: null, armor: null, accessory: null },
+        unlockedSkills: [0],
+        favorite: false,
+        createdAt: Date.now(),
+      });
+    }
+    Storage.saveChars(chars);
+    App.toast('保存しました：' + name, 'var(--accent3)');
+    this.editingId = null;
+  },
+
+  refresh() {
+    this._calcSize();
+    this._drawGrid();
+    this._updatePreview();
+    this._renderPalette();
+  },
+
+  _renderPalette() {
+    const shop = Storage.getShop();
+    const unlocked = shop.unlockedColors || ['white','black','red','blue'];
+    const el = document.getElementById('palette-colors');
+    el.innerHTML = '';
+    for (const pc of BALANCE.paletteColors) {
+      const div = document.createElement('div');
+      div.className = 'palette-color' + (unlocked.includes(pc.id) ? '' : ' locked');
+      if (this.selectedColor === pc.id) div.classList.add('active');
+      div.style.background = pc.hex;
+      div.title = pc.name;
+      if (unlocked.includes(pc.id)) {
+        div.onclick = () => { this.selectedColor = pc.id; this._renderPalette(); };
+      } else {
+        div.onclick = () => App.toast(`「${pc.name}」はショップで購入できます`, 'var(--panel2)');
+      }
+      el.appendChild(div);
+    }
+  },
+};
+
+// ================================================
+// FORMATION
+// ================================================
+const Formation = {
+  selectedId: null,
+  sortMode: 'name_asc',
+
+  render() {
+    const chars = this._getSorted();
+    const listEl = document.getElementById('char-list');
+    listEl.innerHTML = '';
+    for (const char of chars) {
+      const div = document.createElement('div');
+      div.className = 'char-card' + (char.id === this.selectedId ? ' selected' : '') + (char.favorite ? ' favorite' : '');
+      const canvas = document.createElement('canvas');
+      canvas.width = 48; canvas.height = 48;
+      Utils.drawPixels(canvas.getContext('2d'), char.pixels, 3, 16, 16);
+      const name = document.createElement('div');
+      name.className = 'char-card-name'; name.textContent = char.name;
+      const lv = document.createElement('div');
+      lv.className = 'char-card-lv'; lv.textContent = 'LV.' + char.level;
+      div.appendChild(canvas); div.appendChild(name); div.appendChild(lv);
+      div.onclick = () => this.select(char.id);
+      div.oncontextmenu = (e) => { e.preventDefault(); this.select(char.id); };
+      listEl.appendChild(div);
+    }
+    // 追加ボタン
+    const add = document.createElement('div');
+    add.className = 'char-add-btn';
+    add.innerHTML = '<span>＋</span><span style="font-size:11px;color:var(--text3);">新規作成</span>';
+    add.onclick = () => { Editor.newChar(); App.showScreen('editor'); };
+    listEl.appendChild(add);
+
+    if (this.selectedId) this._renderDetail();
+    else document.getElementById('formation-detail').style.display = 'none';
+
+    // 出撃ボタン
+    document.getElementById('battle-start-btn').disabled = !this.selectedId;
+  },
+
+  _getSorted() {
+    let chars = [...Storage.getChars()];
+    switch (this.sortMode) {
+      case 'name_asc':    return chars.sort((a,b) => a.name.localeCompare(b.name));
+      case 'name_desc':   return chars.sort((a,b) => b.name.localeCompare(a.name));
+      case 'level_desc':  return chars.sort((a,b) => b.level - a.level);
+      case 'created_desc':return chars.sort((a,b) => b.createdAt - a.createdAt);
+      case 'fav':         return chars.sort((a,b) => (b.favorite?1:0) - (a.favorite?1:0));
+      default: return chars;
+    }
+  },
+
+  setSort(mode) {
+    this.sortMode = mode;
+    document.querySelectorAll('.sort-btn').forEach(b => b.classList.toggle('active', b.dataset.sort === mode));
+    this.render();
+  },
+
+  select(id) {
+    this.selectedId = id;
+    this.render();
+  },
+
+  getSelected() {
+    return Storage.getChars().find(c => c.id === this.selectedId) || null;
+  },
+
+  _renderDetail() {
+    const char = this.getSelected();
+    if (!char) return;
+    const detail = document.getElementById('formation-detail');
+    detail.style.display = 'flex';
+
+    // Stats
+    const statsEl = document.getElementById('formation-stats');
+    const names = { atk:'ATK', def:'DEF', hp:'HP', spd:'SPD', sp:'SP回復' };
+    statsEl.innerHTML = Object.entries(char.stats).map(([k,v]) =>
+      `<div class="stat-row"><span class="stat-name">${names[k]||k}</span><span class="stat-val">${v}</span></div>`
+    ).join('');
+
+    // Equip
+    const equipEl = document.getElementById('equip-slots');
+    const slots = [
+      { key:'weapon', label:'⚔ 武器' },
+      { key:'armor',  label:'🛡 防具' },
+      { key:'accessory', label:'💍 装飾' },
+    ];
+    equipEl.innerHTML = slots.map(s => {
+      const eq = char.equip[s.key];
+      return `<div class="equip-slot" onclick="Formation.openEquipModal('${s.key}')">
+        <div style="font-size:20px;">${s.label.split(' ')[0]}</div>
+        ${eq ? `<div class="equip-name ${eq.rarity === 'ultra' ? 'rarity-ultra' : eq.rarity === 'rare' ? 'rarity-rare' : 'rarity-normal'}">${eq.name}</div>
+          <div style="font-size:10px;color:var(--text3)">${eq.effect}</div>`
+          : `<div style="font-size:11px;">${s.label.split(' ')[1]}</div>`}
+      </div>`;
+    }).join('');
+
+    // Skill tree
+    const skillEl = document.getElementById('skill-tree');
+    const skills = Utils.getSkills(char.stats);
+    skillEl.innerHTML = skills.map((sk, i) => {
+      const unlocked = char.unlockedSkills.includes(i);
+      const reqLv = BALANCE.skillUnlockLv[i];
+      return `<div class="skill-node ${unlocked ? 'unlocked' : 'locked'}">
+        <div style="font-size:16px;">${i===0?'⚡':i===1?'💥':'🌟'}</div>
+        <div>${sk.name}</div>
+        ${!unlocked ? `<div style="font-size:10px;color:var(--text3)">Lv${reqLv}</div>` : ''}
+      </div>`;
+    }).join('');
+  },
+
+  openEquipModal(slotKey) {
+    const char = this.getSelected();
+    if (!char) return;
+    const modal = document.getElementById('equip-modal');
+    const content = document.getElementById('equip-modal-content');
+    const shopData = Storage.getShop();
+    const available = (shopData.equipStock || []).filter(e => e.slot === slotKey);
+    const current = char.equip[slotKey];
+
+    content.innerHTML = `
+      <div class="equip-modal-title">${slotKey === 'weapon' ? '⚔ 武器' : slotKey === 'armor' ? '🛡 防具' : '💍 装飾'} スロット</div>
+      ${current ? `<div class="equip-modal-effect">装備中: <span class="rarity-${current.rarity}">${current.name}</span> / ${current.effect}</div>` : '<div class="equip-modal-effect">未装備</div>'}
+      <div style="display:flex;flex-direction:column;gap:8px;max-height:200px;overflow-y:auto;margin-bottom:12px;">
+        ${available.length === 0 ? '<div style="font-size:13px;color:var(--text3);text-align:center;padding:16px;">装備可能なアイテムがありません<br>ショップで入手してください</div>' :
+          available.map((eq, i) => {
+            const diff = current ? this._calcEquipDiff(current, eq) : null;
+            return `<div style="background:var(--bg3);border-radius:8px;padding:10px;cursor:pointer;" onclick="Formation.equipItem('${slotKey}', ${i})">
+              <div class="${eq.rarity === 'ultra' ? 'rarity-ultra' : eq.rarity === 'rare' ? 'rarity-rare' : 'rarity-normal'}" style="font-weight:bold;">${eq.name}</div>
+              <div style="font-size:12px;color:var(--text3);">${eq.effect}</div>
+              ${diff ? `<div style="font-size:11px;margin-top:4px;">${Object.entries(diff).map(([k,v]) => `<span class="${v>0?'equip-diff-pos':'equip-diff-neg'}">${k}:${v>0?'+':''}${v}</span>`).join(' ')}</div>` : ''}
+            </div>`;
+          }).join('')}
+      </div>
+      ${current ? `<button class="btn btn-secondary" onclick="Formation.unequipItem('${slotKey}')">外す</button>` : ''}
+      <div style="height:8px;"></div>
+      <button class="btn btn-secondary" onclick="document.getElementById('equip-modal').classList.remove('active')">閉じる</button>
+    `;
+    modal.classList.add('active');
+    modal.onclick = (e) => { if (e.target === modal) modal.classList.remove('active'); };
+  },
+
+  _calcEquipDiff(current, next) {
+    // 簡易差分（効果文字列から数値抽出）
+    return {};
+  },
+
+  equipItem(slotKey, stockIdx) {
+    const chars = Storage.getChars();
+    const char = chars.find(c => c.id === this.selectedId);
+    if (!char) return;
+    const shopData = Storage.getShop();
+    const available = (shopData.equipStock || []).filter(e => e.slot === slotKey);
+    if (!available[stockIdx]) return;
+
+    // 装備中のものをストックに戻す
+    if (char.equip[slotKey]) {
+      shopData.equipStock.push(char.equip[slotKey]);
+    }
+    char.equip[slotKey] = available[stockIdx];
+    // ストックから削除
+    const globalIdx = shopData.equipStock.findIndex(e => e === available[stockIdx]);
+    if (globalIdx >= 0) shopData.equipStock.splice(globalIdx, 1);
+
+    Storage.saveChars(chars);
+    Storage.saveShop(shopData);
+    document.getElementById('equip-modal').classList.remove('active');
+    this.render();
+    App.toast('装備しました', 'var(--accent3)');
+  },
+
+  unequipItem(slotKey) {
+    const chars = Storage.getChars();
+    const char = chars.find(c => c.id === this.selectedId);
+    if (!char || !char.equip[slotKey]) return;
+    const shopData = Storage.getShop();
+    shopData.equipStock.push(char.equip[slotKey]);
+    char.equip[slotKey] = null;
+    Storage.saveChars(chars);
+    Storage.saveShop(shopData);
+    document.getElementById('equip-modal').classList.remove('active');
+    this.render();
+    App.toast('外しました');
+  },
+
+  duplicateChar() {
+    const char = this.getSelected();
+    if (!char) return;
+    const chars = Storage.getChars();
+    const maxSlots = Storage.getShop().maxSlots || 5;
+    if (chars.length >= maxSlots) { App.toast('キャラ上限です', 'var(--accent)'); return; }
+    const copy = {
+      ...char,
+      id: 'c' + Date.now(),
+      name: char.name + '(複製)',
+      level: 1, exp: 0,
+      equip: { weapon: null, armor: null, accessory: null },
+      unlockedSkills: [0],
+      favorite: false,
+      createdAt: Date.now(),
+    };
+    chars.push(copy);
+    Storage.saveChars(chars);
+    App.toast('複製しました', 'var(--accent3)');
+    this.render();
+  },
+
+  toggleFavorite() {
+    const chars = Storage.getChars();
+    const char = chars.find(c => c.id === this.selectedId);
+    if (!char) return;
+    char.favorite = !char.favorite;
+    Storage.saveChars(chars);
+    App.toast(char.favorite ? '★お気に入りに追加' : 'お気に入りを解除');
+    this.render();
+  },
+
+  deleteChar() {
+    const chars = Storage.getChars();
+    const char = chars.find(c => c.id === this.selectedId);
+    if (!char) return;
+    if (char.favorite) { App.toast('お気に入りのキャラは削除できません', 'var(--accent)'); return; }
+    if (chars.length <= 1) { App.toast('最後のキャラは削除できません', 'var(--accent)'); return; }
+    if (Battle.isActive && Battle.playerCharId === this.selectedId) {
+      App.toast('出撃中のキャラは削除できません', 'var(--accent)'); return;
+    }
+    if (!confirm(`「${char.name}」を削除しますか？`)) return;
+    const idx = chars.indexOf(char);
+    chars.splice(idx, 1);
+    Storage.saveChars(chars);
+    this.selectedId = null;
+    App.toast('削除しました');
+    this.render();
+  },
+};
+
+// ================================================
+// AUDIO
+// ================================================
+const Audio = {
+  _ctx: null,
+  _get() {
+    if (!this._ctx) this._ctx = new (window.AudioContext || window.webkitAudioContext)();
+    return this._ctx;
+  },
+  _beep(freq, duration, type = 'square', volume = 0.15) {
+    try {
+      const ctx = this._get();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = type; osc.frequency.value = freq;
+      gain.gain.setValueAtTime(volume, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+      osc.start(ctx.currentTime); osc.stop(ctx.currentTime + duration);
+    } catch(e) {}
+  },
+  _sweep(f1, f2, duration) {
+    try {
+      const ctx = this._get();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = 'square'; osc.frequency.setValueAtTime(f1, ctx.currentTime);
+      osc.frequency.linearRampToValueAtTime(f2, ctx.currentTime + duration);
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+      osc.start(ctx.currentTime); osc.stop(ctx.currentTime + duration);
+    } catch(e) {}
+  },
+  play(type) {
+    switch(type) {
+      case 'attack':  this._beep(220, 0.1); break;
+      case 'skill':   this._sweep(220, 440, 0.3); break;
+      case 'damage':  this._beep(110, 0.1); break;
+      case 'victory': [440,550,660].forEach((f,i) => setTimeout(()=>this._beep(f,0.15),i*150)); break;
+      case 'defeat':  [330,220,110].forEach((f,i) => setTimeout(()=>this._beep(f,0.2),i*200)); break;
+      case 'levelup': [440,550,660,880].forEach((f,i) => setTimeout(()=>this._beep(f,0.12),i*100)); break;
+    }
+  },
+  // BGMフック（将来実装）
+  bgmStart() {},
+  bgmStop() {},
+};
+
+// ================================================
+// BATTLE
+// ================================================
+const Battle = {
+  isActive: false,
+  playerCharId: null,
+  _state: null,
+  _timer: null,
+  _speedIdx: 0,
+  _canvas: null,
+  _ctx: null,
+  _stageOverlayTimer: null,
+  _winStreak: 0,
+  _battleCount: 0,
+
+  start() {
+    const char = Formation.getSelected();
+    if (!char) { App.toast('キャラを選択してください', 'var(--accent)'); return; }
+    this.playerCharId = char.id;
+    this._battleCount++;
+    this._speedIdx = 0;
+    this.isActive = true;
+
+    // ステージ選択
+    const stage = BALANCE.stages[Utils.rand(0, BALANCE.stages.length - 1)];
+    // 敵生成
+    const enemy = this._generateEnemy(this._battleCount);
+    // プレイヤーステータスにステージ補正
+    const pStats = { ...char.stats };
+    if (stage.bonusStat && stage.bonusVal) {
+      pStats[stage.bonusStat] = Math.round(pStats[stage.bonusStat] * (1 + stage.bonusVal));
+    }
+    const eStats = { ...enemy.stats };
+    if (stage.bonusStat && stage.bonusVal) {
+      eStats[stage.bonusStat] = Math.round(eStats[stage.bonusStat] * (1 + stage.bonusVal));
+    }
+
+    this._state = {
+      player: { ...char, stats: pStats, hp: pStats.hp, maxHp: pStats.hp, sp: 0, maxSp: 10, defBuff: 0, invincible: 0, evade: 0, allBuff: 0, nocost: 0, skills: Utils.getSkills(pStats), skillCd: [0,0,0], enhanced: false },
+      enemy:  { ...enemy, stats: eStats, hp: eStats.hp, maxHp: eStats.hp, sp: 0, maxSp: 10, defBuff: 0, invincible: 0, evade: 0, allBuff: 0, nocost: 0, skills: Utils.getSkills(eStats), skillCd: [0,0,0], enhanced: false },
+      stage, turn: 0, kills: 0, maxTurns: BALANCE.maxTurns,
+      log: [], over: false, won: false,
+    };
+
+    App.showScreen('battle');
+    this._initCanvas();
+    this._renderBars();
+    this._renderSkillBtns();
+    this._renderLives();
+    this._updateSpeedBtn();
+
+    // タブバーグレーアウト
+    document.querySelectorAll('.tab-btn').forEach(t => t.classList.add('disabled'));
+
+    // ステージ説明表示
+    this._showStageOverlay(stage);
+  },
+
+  _generateEnemy(battleCount) {
+    const strength = Math.min(1.0, battleCount / 20);
+    const totalPixels = Math.round(50 + strength * 150);
+    const colorCount = Math.round(2 + strength * 4);
+    const availableColors = BALANCE.paletteColors.slice(0, Math.min(colorCount + 2, BALANCE.paletteColors.length));
+    const pixels = Array(256).fill('transparent');
+    // シンメトリー生成
+    const half = 8;
+    for (let row = 0; row < 16; row++) {
+      for (let col = 0; col < half; col++) {
+        if (Math.random() < strength * 0.7 + 0.1) {
+          const color = availableColors[Utils.rand(0, availableColors.length - 1)].id;
+          pixels[row * 16 + col] = color;
+          pixels[row * 16 + (15 - col)] = color;
+        }
+      }
+    }
+    // 使用色が少ない場合は補完
+    let filled = pixels.filter(c => c !== 'transparent').length;
+    while (filled < totalPixels * 0.5) {
+      const idx = Utils.rand(0, 255);
+      if (pixels[idx] === 'transparent') {
+        const color = availableColors[Utils.rand(0, availableColors.length - 1)].id;
+        const mirrorIdx = Math.floor(idx / 16) * 16 + (15 - (idx % 16));
+        pixels[idx] = color;
+        pixels[mirrorIdx] = color;
+        filled += 2;
+      }
+    }
+    const stats = Utils.calcStats(pixels);
+    const name = Utils.autoName(pixels);
+    return {
+      id: 'enemy_' + Date.now(),
+      name: 'ENEMY:' + name,
+      pixels, stats,
+      level: Math.round(1 + strength * 15),
+    };
+  },
+
+  _initCanvas() {
+    this._canvas = document.getElementById('battle-canvas');
+    const wrap = document.getElementById('battle-canvas-wrap');
+    this._canvas.width = wrap.clientWidth;
+    this._canvas.height = wrap.clientHeight;
+    this._ctx = this._canvas.getContext('2d');
+    this._drawBattle();
+  },
+
+  _drawBattle(opts = {}) {
+    const ctx = this._ctx;
+    const W = this._canvas.width, H = this._canvas.height;
+    const state = this._state;
+    ctx.clearRect(0, 0, W, H);
+
+    // ステージ背景
+    const bg = state.stage.bg;
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, bg[0]);
+    grad.addColorStop(0.5, bg[1]);
+    grad.addColorStop(1, bg[2]);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+
+    // キャラ表示サイズ・位置
+    const charSize = Math.min(80, W * 0.3);
+    const dotSize = Math.floor(charSize / 16);
+    const actualSize = dotSize * 16;
+    const yCenterRatio = 0.5;
+    const yOffset = H * yCenterRatio - actualSize / 2;
+    const idleOffset = Math.sin(Date.now() / 1000 * Math.PI) * 2;
+
+    // 敵（左側）
+    const eX = W * 0.25 - actualSize / 2 + (opts.enemySlide || 0);
+    const eY = yOffset + idleOffset + (opts.enemyFall || 0);
+    this._drawCharOnCtx(ctx, state.enemy.pixels, eX, eY, dotSize);
+
+    // プレイヤー（右側）
+    const pX = W * 0.75 - actualSize / 2 + (opts.playerSlide || 0);
+    const pY = yOffset + idleOffset + (opts.playerFall || 0);
+    this._drawCharOnCtx(ctx, state.player.pixels, pX, pY, dotSize);
+  },
+
+  _drawCharOnCtx(ctx, pixels, x, y, dotSize) {
+    for (let i = 0; i < 256; i++) {
+      const c = pixels[i];
+      if (!c || c === 'transparent') continue;
+      const pc = BALANCE.paletteColors.find(p => p.id === c);
+      if (!pc) continue;
+      const px = x + (i % 16) * dotSize;
+      const py = y + Math.floor(i / 16) * dotSize;
+      ctx.fillStyle = pc.hex;
+      ctx.fillRect(px, py, dotSize, dotSize);
+    }
+  },
+
+  _showStageOverlay(stage) {
+    const overlay = document.getElementById('stage-overlay');
+    overlay.style.display = 'flex';
+    document.getElementById('stage-name-text').textContent = stage.name;
+    document.getElementById('stage-bonus-text').textContent = stage.bonus;
+    document.getElementById('stage-gimmick-text').textContent = stage.gimmick !== 'なし' ? `ギミック: ${stage.gimmick}` : '';
+    overlay.style.display = 'flex';
+    this._stageOverlayTimer = setTimeout(() => this._hideStageOverlay(), 3000);
+  },
+
+  skipStageOverlay() {
+    clearTimeout(this._stageOverlayTimer);
+    this._hideStageOverlay();
+  },
+
+  _hideStageOverlay() {
+    document.getElementById('stage-overlay').style.display = 'none';
+    this._startLoop();
+  },
+
+  _startLoop() {
+    if (this._timer) clearInterval(this._timer);
+    this._tick();
+    this._timer = setInterval(() => this._tick(), 1000 / BALANCE.speedSteps[this._speedIdx]);
+  },
+
+  _stopLoop() {
+    if (this._timer) { clearInterval(this._timer); this._timer = null; }
+  },
+
+  _tick() {
+    const state = this._state;
+    if (state.over) return;
+    state.turn++;
+
+    // ステージギミック
+    const stage = state.stage;
+    if (stage.gimmickInterval > 0 && state.turn % stage.gimmickInterval === 0) {
+      if (stage.id === 'cave') {
+        state.player.hp = Math.max(0, state.player.hp - stage.gimmickDmg);
+        state.enemy.hp  = Math.max(0, state.enemy.hp - stage.gimmickDmg);
+        this._showEffect('岩落下！', '#888', 'center');
+      } else if (stage.id === 'beach') {
+        state.player.sp = Math.min(state.player.maxSp, state.player.sp + 2);
+        state.enemy.sp  = Math.min(state.enemy.maxSp,  state.enemy.sp + 2);
+        this._showEffect('波！SP+', '#60a5fa', 'center');
+      } else if (stage.id === 'volcano') {
+        state.player.hp = Math.max(0, state.player.hp - stage.gimmickDmg);
+        state.enemy.hp  = Math.max(0, state.enemy.hp - stage.gimmickDmg);
+        this._showEffect('噴火！', '#f5a623', 'center');
+      }
+    }
+
+    // SP回復
+    const pSpRec = Math.max(1, Math.round(state.player.stats.sp / 20));
+    const eSpRec = Math.max(1, Math.round(state.enemy.stats.sp / 20));
+    state.player.sp = Math.min(state.player.maxSp, state.player.sp + pSpRec);
+    state.enemy.sp  = Math.min(state.enemy.maxSp,  state.enemy.sp + eSpRec);
+
+    // クールダウン
+    state.player.skillCd = state.player.skillCd.map(cd => Math.max(0, cd - 1));
+    state.enemy.skillCd  = state.enemy.skillCd.map(cd => Math.max(0, cd - 1));
+
+    // バフターン減少
+    ['defBuff','invincible','evade','allBuff','nocost'].forEach(k => {
+      if (state.player[k] > 0) state.player[k]--;
+      if (state.enemy[k] > 0) state.enemy[k]--;
+    });
+
+    // HP30%以下強化
+    if (!state.enemy.enhanced && state.enemy.hp < state.enemy.maxHp * 0.3) {
+      state.enemy.enhanced = true;
+      state.enemy.stats = { ...state.enemy.stats, atk: Math.round(state.enemy.stats.atk * 1.5) };
+      this._showEffect('敵が強化！', '#e94560', 'left');
+    }
+
+    // 先攻決定
+    const playerFirst = state.player.stats.spd >= state.enemy.stats.spd;
+
+    // 敵AIスキル判断
+    const enemySkillIdx = this._enemySkillDecide(state);
+
+    if (playerFirst) {
+      this._doAttack(state.player, state.enemy, null, false);
+      if (state.enemy.hp > 0) {
+        if (enemySkillIdx >= 0) this._doSkill(state.enemy, state.player, enemySkillIdx, true);
+        else this._doAttack(state.enemy, state.player, null, true);
+      }
+    } else {
+      if (enemySkillIdx >= 0) this._doSkill(state.enemy, state.player, enemySkillIdx, true);
+      else this._doAttack(state.enemy, state.player, null, true);
+      if (state.player.hp > 0) this._doAttack(state.player, state.enemy, null, false);
+    }
+
+    // ターン上限
+    if (state.turn >= state.maxTurns && !state.over) {
+      const pWin = state.player.hp >= state.enemy.hp;
+      this._endBattle(pWin ? 'win' : 'lose');
+      return;
+    }
+
+    // HP0チェック
+    if (state.enemy.hp <= 0 && !state.over) {
+      state.kills++;
+      state.enemy = this._generateEnemy(this._battleCount + state.kills);
+      this._renderBars();
+      Audio.play('victory');
+    }
+    if (state.player.hp <= 0 && !state.over) {
+      this._loseLife();
+      return;
+    }
+
+    this._drawBattle();
+    this._renderBars();
+    this._renderSkillBtns();
+    this._renderLives();
+    document.getElementById('turn-counter').textContent = 'T:' + state.turn;
+  },
+
+  _enemySkillDecide(state) {
+    const enemy = state.enemy;
+    for (let i = 2; i >= 0; i--) {
+      if (!enemy.skills[i]) continue;
+      const sk = enemy.skills[i];
+      if (enemy.sp < sk.spCost) continue;
+      if (enemy.skillCd[i] > 0) continue;
+      if (Math.random() < 0.25) return i;
+    }
+    return -1;
+  },
+
+  _doAttack(attacker, defender, mult, isEnemy) {
+    if (defender.invincible > 0) {
+      this._showEffect('無敵！', '#ffd700', isEnemy ? 'right' : 'left');
+      return;
+    }
+    if (defender.evade > 0 && Math.random() < 0.4) {
+      this._showEffect('回避！', '#a8e063', isEnemy ? 'right' : 'left');
+      return;
+    }
+    const atkStat = attacker.allBuff > 0 ? attacker.stats.atk * 1.3 : attacker.stats.atk;
+    const defStat = attacker === this._state.player ? 0 : (defender.defBuff > 0 ? defender.stats.def * 1.5 : defender.stats.def);
+    const base = Math.max(1, atkStat * (mult || 1) - defStat * BALANCE.defReduction);
+    const variance = 1 + (Math.random() * 2 - 1) * BALANCE.dmgVariance;
+    const spdDiff = Math.abs(attacker.stats.spd - defender.stats.spd);
+    const critRate = Math.min(BALANCE.critMaxRate, spdDiff / 100);
+    const isCrit = Math.random() < critRate;
+    const dmg = Math.max(1, Math.round(base * variance * (isCrit ? BALANCE.critMultiplier : 1)));
+    defender.hp = Math.max(0, defender.hp - dmg);
+    const color = isCrit ? '#ffd700' : (isEnemy ? '#e94560' : '#4ecdc4');
+    this._showEffect((isCrit ? '💥' : '') + dmg, color, isEnemy ? 'right' : 'left');
+    // カウンター処理
+    if (defender.skills) {
+      const counterIdx = defender.skills.findIndex(s => s && s.type === 'counter');
+      if (counterIdx >= 0 && defender.skillCd[counterIdx] === 0 && Math.random() < 0.3) {
+        const cDmg = Math.round(dmg * 0.5);
+        attacker.hp = Math.max(0, attacker.hp - cDmg);
+        this._showEffect('反撃! ' + cDmg, '#f5a623', isEnemy ? 'left' : 'right');
+      }
+    }
+    Audio.play(isEnemy ? 'damage' : 'attack');
+    this._slideAnim(isEnemy ? 'enemy' : 'player');
+  },
+
+  _doSkill(attacker, defender, skillIdx, isEnemy) {
+    const sk = attacker.skills[skillIdx];
+    if (!sk) return;
+    if (attacker.nocost === 0) {
+      if (attacker.sp < sk.spCost) return;
+      attacker.sp -= sk.spCost;
+    }
+    attacker.skillCd[skillIdx] = sk.cooldown;
+
+    const effectColor = sk.type === 'atk' || sk.type === 'drain' || sk.type === 'double' ? (isEnemy ? '#8b0000' : '#e94560')
+      : sk.type === 'heal' || sk.type === 'fullheal' ? (isEnemy ? '#145214' : '#4ecdc4')
+      : (isEnemy ? '#856400' : '#f5a623');
+
+    switch(sk.type) {
+      case 'atk':
+        if (sk.hits) {
+          for (let h = 0; h < sk.hits; h++) this._doAttack(attacker, defender, sk.mult, isEnemy);
+        } else {
+          this._doAttack(attacker, defender, sk.mult, isEnemy);
+        }
+        break;
+      case 'heal':
+        attacker.hp = Math.min(attacker.maxHp, attacker.hp + Math.round(attacker.maxHp * sk.rate));
+        this._showEffect('回復!', '#4ecdc4', isEnemy ? 'left' : 'right');
+        break;
+      case 'fullheal':
+        attacker.hp = attacker.maxHp;
+        this._showEffect('完全回復!', '#4ecdc4', isEnemy ? 'left' : 'right');
+        break;
+      case 'drain':
+        const drainDmg = Math.max(1, Math.round(attacker.stats.atk * sk.mult - defender.stats.def * BALANCE.defReduction));
+        defender.hp = Math.max(0, defender.hp - drainDmg);
+        attacker.hp = Math.min(attacker.maxHp, attacker.hp + Math.round(drainDmg * 0.5));
+        this._showEffect('吸収!' + drainDmg, '#a855f7', isEnemy ? 'right' : 'left');
+        break;
+      case 'def':
+        attacker.defBuff = sk.turns;
+        this._showEffect('防御↑', '#3a7bd5', isEnemy ? 'left' : 'right');
+        break;
+      case 'invincible':
+        attacker.invincible = sk.turns;
+        this._showEffect('無敵!', '#ffd700', isEnemy ? 'left' : 'right');
+        break;
+      case 'evade':
+        attacker.evade = sk.turns;
+        this._showEffect('回避↑', '#a8e063', isEnemy ? 'left' : 'right');
+        break;
+      case 'double':
+        this._doAttack(attacker, defender, 1, isEnemy);
+        this._doAttack(attacker, defender, 1, isEnemy);
+        break;
+      case 'spfull':
+        attacker.sp = attacker.maxSp;
+        this._showEffect('SP↑↑', '#f5a623', isEnemy ? 'left' : 'right');
+        break;
+      case 'allbuff':
+        attacker.allBuff = sk.turns;
+        this._showEffect('全能力↑', '#ffd700', isEnemy ? 'left' : 'right');
+        break;
+      case 'nocost':
+        attacker.nocost = sk.turns;
+        this._showEffect('SP無消費!', '#f5a623', isEnemy ? 'left' : 'right');
+        break;
+    }
+    this._flash(effectColor);
+    Audio.play('skill');
+  },
+
+  _loseLife() {
+    const chars = Storage.getChars();
+    const char = chars.find(c => c.id === this.playerCharId);
+    if (char) {
+      char._battleLives = (char._battleLives || BALANCE.lifeCount) - 1;
+      if (char._battleLives <= 0) {
+        char._battleLives = 0;
+        Storage.saveChars(chars);
+        this._endBattle('lose');
+        return;
+      }
+      char._battleLives--;
+      Storage.saveChars(chars);
+    }
+    this._state.player.hp = this._state.player.maxHp;
+    this._renderLives();
+    Audio.play('damage');
+    App.toast('残機−1！', 'var(--accent)');
+  },
+
+  _endBattle(result) {
+    this._stopLoop();
+    this._state.over = true;
+    this._state.won = result === 'win';
+    this.isActive = false;
+
+    // タブバー戻す
+    document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('disabled'));
+
+    const chars = Storage.getChars();
+    const char = chars.find(c => c.id === this.playerCharId);
+    let drops = [];
+    let expGain = 0;
+    let leveled = false;
+
+    if (char) {
+      char._battleLives = BALANCE.lifeCount; // リセット
+
+      // EXP
+      expGain = Utils.calcExp(this._state.enemy.stats, this._battleCount);
+      char.exp = (char.exp || 0) + expGain;
+      while (char.exp >= Utils.expToLevel(char.level) && char.level < BALANCE.maxLevel) {
+        char.exp -= Utils.expToLevel(char.level);
+        char.level++;
+        leveled = true;
+        // スキル解放チェック
+        BALANCE.skillUnlockLv.forEach((lv, i) => {
+          if (char.level >= lv && !char.unlockedSkills.includes(i)) {
+            char.unlockedSkills.push(i);
+            App.toast(`スキル${i+1}解放！`, 'var(--accent2)');
+          }
+        });
+      }
+      // Lv50上限→ポイント変換
+      if (char.level >= BALANCE.maxLevel && char.exp > 0) {
+        const shopData = Storage.getShop();
+        const pts = Math.floor(char.exp / 10);
+        shopData.points = Math.min(BALANCE.maxPoints, shopData.points + pts);
+        Storage.saveShop(shopData);
+        char.exp = char.exp % 10;
+        if (pts > 0) App.toast(`Lv上限！${pts}pt獲得`, 'var(--accent2)');
+      }
+
+      // ドロップ
+      if (result === 'win' && Math.random() < 0.25) {
+        const drop = this._generateEquip();
+        const shopData = Storage.getShop();
+        if (!shopData.equipStock) shopData.equipStock = [];
+        shopData.equipStock.push(drop);
+        Storage.saveShop(shopData);
+        drops.push(drop);
+        App.toast(`装備入手: ${drop.name}！`, 'var(--rare-color)');
+      }
+
+      Storage.saveChars(chars);
+    }
+
+    // 連勝更新
+    if (result === 'win') this._winStreak++;
+    else { this._winStreak = 0; }
+
+    // スコア計算
+    const hpRate = Math.round((this._state.player.hp / this._state.player.maxHp) * 100);
+    const score = Utils.calcScore(this._state.kills, hpRate, this._state.turn, this._winStreak);
+
+    // ランキング登録
+    if (result === 'win' && score > 0) this._saveRanking(score, char);
+
+    // リザルト表示
+    setTimeout(() => {
+      this._showResult(result, score, expGain, drops, leveled);
+      if (leveled) Audio.play('levelup');
+    }, result === 'win' ? 1500 : 800);
+
+    Audio.play(result === 'win' ? 'victory' : 'defeat');
+  },
+
+  _saveRanking(score, char) {
+    const ranking = Storage.getRanking();
+    ranking.push({
+      score, charName: char ? char.name : '?',
+      pixels: char ? char.pixels : null,
+      kills: this._state.kills,
+      turns: this._state.turn,
+      winStreak: this._winStreak,
+      date: Date.now(),
+    });
+    ranking.sort((a, b) => b.score - a.score);
+    if (ranking.length > 10) ranking.length = 10;
+    Storage.saveRanking(ranking);
+  },
+
+  _showResult(result, score, exp, drops, leveled) {
+    const titleEl = document.getElementById('result-title');
+    titleEl.textContent = result === 'win' ? '🎉 VICTORY!' : '💀 DEFEAT...';
+    titleEl.className = 'result-title ' + (result === 'win' ? 'win' : 'lose');
+
+    const scoreEl = document.getElementById('result-score-val');
+    scoreEl.textContent = score.toLocaleString();
+
+    // キャラドット絵
+    const chars = Storage.getChars();
+    const char = chars.find(c => c.id === this.playerCharId);
+    if (char) {
+      const canvas = document.getElementById('result-char-canvas');
+      Utils.drawPixels(canvas.getContext('2d'), char.pixels, 4, 16, 16);
+    }
+
+    // 統計
+    const statsEl = document.getElementById('result-stats');
+    statsEl.innerHTML = `
+      <div class="result-stat-row"><span class="label">撃破数</span><span class="val">${this._state.kills}</span></div>
+      <div class="result-stat-row"><span class="label">経過ターン</span><span class="val">${this._state.turn}</span></div>
+      <div class="result-stat-row"><span class="label">獲得EXP</span><span class="val">+${exp}</span></div>
+      <div class="result-stat-row"><span class="label">連勝数</span><span class="val">${this._winStreak}</span></div>
+      ${char ? `<div class="result-stat-row"><span class="label">${char.name} LV</span><span class="val">${char.level}${leveled?'（UP！）':''}</span></div>` : ''}
+    `;
+
+    // ドロップ
+    const dropsEl = document.getElementById('result-drops');
+    if (drops.length > 0) {
+      dropsEl.innerHTML = '<div class="section-title">ドロップ品</div><div class="drop-list">' +
+        drops.map(d => `<div class="drop-item" style="border-color:${d.rarity==='ultra'?'var(--ultra-color)':d.rarity==='rare'?'var(--rare-color)':'var(--normal-color)'}">${d.name}</div>`).join('') +
+        '</div>';
+    } else {
+      dropsEl.innerHTML = '';
+    }
+
+    App.showScreen('result');
+  },
+
+  _generateEquip() {
+    const rnd = Math.random();
+    const rarity = rnd < 0.1 ? 'ultra' : rnd < 0.4 ? 'rare' : 'normal';
+    const stats = ['atk','def','hp','spd','sp'];
+    const stat = stats[Utils.rand(0, stats.length - 1)];
+    const slotKeys = ['weapon','armor','accessory'];
+    const slot = slotKeys[Utils.rand(0, slotKeys.length - 1)];
+    const slotNames = { weapon: '⚔', armor: '🛡', accessory: '💍' };
+    const statNames = { atk:'ATK', def:'DEF', hp:'HP', spd:'SPD', sp:'SP回復' };
+
+    let name, effect;
+    if (rarity === 'ultra') {
+      const flat = Utils.rand(8, 15);
+      const pct = Utils.rand(3, 8);
+      name = `${slotNames[slot]}輝${statNames[stat]}装備`;
+      effect = `${statNames[stat]}+${flat}かつ+${pct}%`;
+    } else if (rarity === 'rare') {
+      const pct = Utils.rand(5, 12);
+      name = `${slotNames[slot]}強化${statNames[stat]}装備`;
+      effect = `${statNames[stat]}+${pct}%`;
+    } else {
+      const flat = Utils.rand(5, 12);
+      name = `${slotNames[slot]}${statNames[stat]}装備`;
+      effect = `${statNames[stat]}+${flat}`;
+    }
+    return { name, effect, rarity, slot, enhancement: 0 };
+  },
+
+  activateSkill(idx) {
+    const state = this._state;
+    if (!state || state.over) return;
+    const player = state.player;
+    const sk = player.skills[idx];
+    if (!sk) return;
+    if (!player.unlockedSkills) return;
+    const char = Storage.getChars().find(c => c.id === this.playerCharId);
+    if (!char || !char.unlockedSkills.includes(idx)) return;
+    if (player.skillCd[idx] > 0) return;
+    if (player.sp < sk.spCost && player.nocost === 0) return;
+    this._doSkill(player, state.enemy, idx, false);
+    this._renderBars();
+    this._renderSkillBtns();
+  },
+
+  _renderBars() {
+    const s = this._state;
+    if (!s) return;
+    const pHp = Math.max(0, s.player.hp / s.player.maxHp * 100).toFixed(1);
+    const eHp = Math.max(0, s.enemy.hp / s.enemy.maxHp * 100).toFixed(1);
+    const pSp = Math.max(0, s.player.sp / s.player.maxSp * 100).toFixed(1);
+    const eSp = Math.max(0, s.enemy.sp / s.enemy.maxSp * 100).toFixed(1);
+    document.getElementById('player-hp-bar').style.width = pHp + '%';
+    document.getElementById('enemy-hp-bar').style.width = eHp + '%';
+    document.getElementById('player-sp-bar').style.width = pSp + '%';
+    document.getElementById('enemy-sp-bar').style.width = eSp + '%';
+    document.getElementById('player-hp-text').textContent = `${s.player.hp}/${s.player.maxHp}`;
+    document.getElementById('enemy-hp-text').textContent = `${s.enemy.hp}/${s.enemy.maxHp}`;
+    document.getElementById('player-name-label').textContent = s.player.name;
+    document.getElementById('enemy-name-label').textContent = s.enemy.name;
+  },
+
+  _renderSkillBtns() {
+    const s = this._state;
+    if (!s) return;
+    const el = document.getElementById('battle-skills');
+    el.innerHTML = '';
+    const char = Storage.getChars().find(c => c.id === this.playerCharId);
+    for (let i = 0; i < 3; i++) {
+      const sk = s.player.skills[i];
+      const btn = document.createElement('div');
+      btn.className = 'skill-btn';
+      const unlocked = char && char.unlockedSkills.includes(i);
+      if (!sk || !unlocked) {
+        btn.classList.add('locked-skill');
+        btn.innerHTML = `<span style="font-size:18px;">🔒</span><span>${sk?sk.name:'???'}</span>`;
+      } else {
+        const ready = s.player.sp >= sk.spCost && s.player.skillCd[i] === 0;
+        if (ready) btn.classList.add('ready');
+        if (s.player.skillCd[i] > 0) { btn.classList.add('cooldown'); btn.innerHTML += `<span class="cd-text">${s.player.skillCd[i]}</span>`; }
+        btn.innerHTML += `<span style="font-size:16px;">${i===0?'⚡':i===1?'💥':'🌟'}</span><span>${sk.name}</span><span style="font-size:10px;color:var(--sp-color)">SP:${sk.spCost}</span>`;
+        btn.onclick = () => this.activateSkill(i);
+      }
+      el.appendChild(btn);
+    }
+  },
+
+  _renderLives() {
+    const el = document.getElementById('player-lives');
+    const chars = Storage.getChars();
+    const char = chars.find(c => c.id === this.playerCharId);
+    const lives = char ? (char._battleLives !== undefined ? char._battleLives : BALANCE.lifeCount) : BALANCE.lifeCount;
+    el.innerHTML = '';
+    for (let i = 0; i < BALANCE.lifeCount; i++) {
+      const h = document.createElement('span');
+      h.className = 'heart' + (i >= lives ? ' empty' : '');
+      h.textContent = '♥';
+      el.appendChild(h);
+    }
+  },
+
+  _showEffect(text, color, side) {
+    const wrap = document.getElementById('battle-canvas-wrap');
+    const W = wrap.clientWidth;
+    const el = document.createElement('div');
+    el.className = 'battle-effect';
+    el.textContent = text;
+    el.style.color = color;
+    el.style.left = (side === 'left' ? Utils.rand(10, 35) : side === 'right' ? Utils.rand(55, 80) : Utils.rand(35, 55)) + '%';
+    el.style.top = Utils.rand(30, 60) + '%';
+    wrap.appendChild(el);
+    setTimeout(() => el.remove(), 900);
+  },
+
+  _flash(color) {
+    const el = document.getElementById('flash-overlay');
+    el.style.background = color;
+    el.style.opacity = '0.35';
+    setTimeout(() => { el.style.opacity = '0'; }, 150);
+  },
+
+  _slideAnim(who) {
+    // 簡易アニメーション：再描画で表現
+    let frame = 0;
+    const anim = () => {
+      frame++;
+      const slide = who === 'player' ? Math.sin(frame * 1.2) * 8 : 0;
+      const eSlide = who === 'enemy' ? Math.sin(frame * 1.2) * 8 : 0;
+      this._drawBattle({ playerSlide: slide, enemySlide: eSlide });
+      if (frame < 6) requestAnimationFrame(anim);
+    };
+    requestAnimationFrame(anim);
+  },
+
+  cycleSpeed() {
+    this._speedIdx = (this._speedIdx + 1) % BALANCE.speedSteps.length;
+    this._updateSpeedBtn();
+    this._startLoop();
+  },
+
+  _updateSpeedBtn() {
+    document.getElementById('speed-btn').textContent = '×' + BALANCE.speedSteps[this._speedIdx];
+  },
+
+  pause() {
+    this._stopLoop();
+    document.getElementById('pause-overlay').classList.add('active');
+  },
+
+  resume() {
+    document.getElementById('pause-overlay').classList.remove('active');
+    this._startLoop();
+  },
+
+  abandon() {
+    this._stopLoop();
+    this._winStreak = 0;
+    this.isActive = false;
+    document.getElementById('pause-overlay').classList.remove('active');
+    document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('disabled'));
+    // 残機リセット
+    const chars = Storage.getChars();
+    const char = chars.find(c => c.id === this.playerCharId);
+    if (char) { char._battleLives = BALANCE.lifeCount; Storage.saveChars(chars); }
+    App.showScreen('title');
+  },
+};
+
+// ================================================
+// SHOP
+// ================================================
+const Shop = {
+  _tab: 'color',
+
+  render() {
+    const shopData = Storage.getShop();
+    document.getElementById('shop-points').textContent = shopData.points + ' pt';
+    this._renderContent();
+  },
+
+  setTab(tab) {
+    this._tab = tab;
+    ['color','equip','item'].forEach(t => {
+      document.getElementById('shop-tab-' + t).classList.toggle('active', t === tab);
+    });
+    this._renderContent();
+  },
+
+  _renderContent() {
+    const shopData = Storage.getShop();
+    const el = document.getElementById('shop-content');
+    const refreshEl = document.getElementById('shop-refresh-row');
+    refreshEl.innerHTML = '';
+
+    if (this._tab === 'color') {
+      const unlocked = shopData.unlockedColors || ['white','black','red','blue'];
+      const available = BALANCE.paletteColors.filter(c => !unlocked.includes(c.id));
+      if (available.length === 0) {
+        el.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text3);">全カラー入手済み！</div>';
+        return;
+      }
+      el.innerHTML = '<div class="shop-color-grid">' + available.map(pc => `
+        <div class="shop-color-item">
+          <div class="shop-color-swatch" style="background:${pc.hex}"></div>
+          <div class="shop-color-info">
+            <div class="shop-color-name">${pc.name}</div>
+            <div class="shop-color-stat">${pc.stat}</div>
+            <div class="shop-color-price">${pc.price} pt</div>
+          </div>
+          <button class="btn btn-sm btn-accent2" onclick="Shop.buyColor('${pc.id}')">購入</button>
+        </div>
+      `).join('') + '</div>';
+
+    } else if (this._tab === 'equip') {
+      this._ensureEquipStock(shopData);
+      const maxStock = Math.min(10, 3 + Math.floor(this._getMaxLevel() / 10));
+      const stock = shopData.equipStock.filter(e => !e._forSale === false).slice(0, maxStock);
+      // ショップ在庫と手持ち装備を分離（_forSaleフラグ）
+      const saleStock = (shopData.saleStock || []).slice(0, maxStock);
+      if (saleStock.length === 0) {
+        el.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text3);">在庫なし<br>バトル後に更新されます</div>';
+      } else {
+        el.innerHTML = '<div class="shop-equip-list">' + saleStock.map((eq, i) => `
+          <div class="shop-equip-item">
+            <div class="shop-equip-info">
+              <div class="shop-equip-name ${eq.rarity==='ultra'?'rarity-ultra':eq.rarity==='rare'?'rarity-rare':'rarity-normal'}">${eq.name}</div>
+              <div class="shop-equip-effect">${eq.effect}</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+              <div class="shop-equip-price">${eq.price} pt</div>
+              <button class="btn btn-sm btn-accent2" onclick="Shop.buyEquip(${i})">購入</button>
+            </div>
+          </div>
+        `).join('') + '</div>';
+      }
+      refreshEl.innerHTML = `<button class="btn btn-sm btn-secondary" onclick="Shop.refreshEquip()">🔄 在庫更新 (${BALANCE.shopRefreshCost}pt)</button>`;
+
+    } else if (this._tab === 'item') {
+      el.innerHTML = `
+        <div class="shop-equip-list">
+          <div class="shop-equip-item">
+            <div class="shop-equip-info">
+              <div class="shop-equip-name rarity-ultra">💎 進化の石</div>
+              <div class="shop-equip-effect">Lv20のキャラを進化させる</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:2px;">所持: ${shopData.evolveStones || 0}個</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+              <div class="shop-equip-price">${BALANCE.evolveItemCost} pt</div>
+              <button class="btn btn-sm btn-accent2" onclick="Shop.buyEvolveStone()">購入</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+  },
+
+  _getMaxLevel() {
+    const chars = Storage.getChars();
+    return chars.reduce((m, c) => Math.max(m, c.level), 1);
+  },
+
+  _ensureEquipStock(shopData) {
+    if (!shopData.saleStock || shopData.saleStock.length === 0) {
+      this._refreshSaleStock(shopData);
+    }
+  },
+
+  _refreshSaleStock(shopData) {
+    const count = Math.min(10, 3 + Math.floor(this._getMaxLevel() / 10));
+    shopData.saleStock = [];
+    for (let i = 0; i < count; i++) {
+      const eq = Battle._generateEquip();
+      const rnd = Math.random();
+      eq.price = eq.rarity === 'ultra' ? 400 : eq.rarity === 'rare' ? 200 : 80;
+      shopData.saleStock.push(eq);
+    }
+  },
+
+  buyColor(colorId) {
+    const shopData = Storage.getShop();
+    const pc = BALANCE.paletteColors.find(c => c.id === colorId);
+    if (!pc) return;
+    if (shopData.points < pc.price) { App.toast('ポイントが不足しています', 'var(--accent)'); return; }
+    shopData.points -= pc.price;
+    if (!shopData.unlockedColors) shopData.unlockedColors = ['white','black','red','blue'];
+    if (!shopData.unlockedColors.includes(colorId)) shopData.unlockedColors.push(colorId);
+    Storage.saveShop(shopData);
+    App.toast(`「${pc.name}」を入手！`, 'var(--accent3)');
+    this.render();
+  },
+
+  buyEquip(saleIdx) {
+    const shopData = Storage.getShop();
+    const eq = (shopData.saleStock || [])[saleIdx];
+    if (!eq) return;
+    if (shopData.points < eq.price) { App.toast('ポイントが不足しています', 'var(--accent)'); return; }
+    shopData.points -= eq.price;
+    if (!shopData.equipStock) shopData.equipStock = [];
+    shopData.equipStock.push({ ...eq });
+    shopData.saleStock.splice(saleIdx, 1);
+    Storage.saveShop(shopData);
+    App.toast(`「${eq.name}」を入手！`, 'var(--rare-color)');
+    this.render();
+  },
+
+  buyEvolveStone() {
+    const shopData = Storage.getShop();
+    if (shopData.points < BALANCE.evolveItemCost) { App.toast('ポイントが不足しています', 'var(--accent)'); return; }
+    shopData.points -= BALANCE.evolveItemCost;
+    shopData.evolveStones = (shopData.evolveStones || 0) + 1;
+    Storage.saveShop(shopData);
+    App.toast('進化の石を入手！', 'var(--ultra-color)');
+    this.render();
+  },
+
+  refreshEquip() {
+    const shopData = Storage.getShop();
+    if (shopData.points < BALANCE.shopRefreshCost) { App.toast('ポイントが不足しています', 'var(--accent)'); return; }
+    shopData.points -= BALANCE.shopRefreshCost;
+    this._refreshSaleStock(shopData);
+    Storage.saveShop(shopData);
+    App.toast('在庫を更新しました');
+    this.render();
+  },
+};
+
+// ================================================
+// RANKING
+// ================================================
+const Ranking = {
+  render() {
+    const ranking = Storage.getRanking();
+    const el = document.getElementById('ranking-list');
+    el.innerHTML = '';
+    if (ranking.length === 0) {
+      el.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text3);">まだ記録がありません<br>バトルに勝利してランクインしよう！</div>';
+    } else {
+      ranking.forEach((r, i) => {
+        const div = document.createElement('div');
+        div.className = 'ranking-item';
+        const rankEl = document.createElement('div');
+        rankEl.className = 'rank-num' + (i===0?' gold':i===1?' silver':i===2?' bronze':'');
+        rankEl.textContent = i + 1;
+        div.appendChild(rankEl);
+        if (r.pixels) {
+          const canvas = document.createElement('canvas');
+          canvas.className = 'rank-dot-canvas';
+          canvas.width = 32; canvas.height = 32;
+          Utils.drawPixels(canvas.getContext('2d'), r.pixels, 2, 16, 16);
+          div.appendChild(canvas);
+        }
+        const info = document.createElement('div');
+        info.className = 'rank-info';
+        info.innerHTML = `
+          <div class="rank-name">${r.charName}</div>
+          <div class="rank-score">${r.score.toLocaleString()}</div>
+          <div class="rank-stats">
+            <span>撃破:${r.kills}</span>
+            <span>ターン:${r.turns}</span>
+            <span>連勝:${r.winStreak||0}</span>
+          </div>
+        `;
+        div.appendChild(info);
+        el.appendChild(div);
+      });
+    }
+    // パーソナルベスト
+    const best = ranking.length > 0 ? ranking[0].score : null;
+    document.getElementById('my-best-score').textContent = best ? best.toLocaleString() : '---';
+  },
+};
+
+// ================================================
+// INIT
+// ================================================
+window.addEventListener('DOMContentLoaded', () => {
+  Editor.init();
+  App.init();
+  // アイドルアニメーション（タイトルのみ）
+  let lastFrame = 0;
+  const titleAnim = (ts) => {
+    if (App.currentScreen === 'title' && ts - lastFrame > 50) {
+      TitleScreen.render();
+      lastFrame = ts;
+    }
+    requestAnimationFrame(titleAnim);
+  };
+  requestAnimationFrame(titleAnim);
+});
+
+// リサイズ対応
+window.addEventListener('resize', () => {
+  if (App.currentScreen === 'editor') Editor._calcSize(), Editor._drawGrid();
+  if (Battle.isActive) Battle._initCanvas();
+});
+</script>
+</body>
+</html>
