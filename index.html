@@ -4,6 +4,7 @@
 <!--
   Pico Dot Battler
   v0.1.0 - 2026-03-19 : 初期実装
+  v0.1.1 - 2026-03-19 : バグ修正（START遷移・削除・編集・装備表示・スキルツリー）
 -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -532,6 +533,7 @@ body { display: flex; flex-direction: column; }
     <div class="editor-actions">
       <button class="btn btn-secondary" style="flex:1;" onclick="Editor.newChar()">新規</button>
       <button class="btn btn-accent3" style="flex:2;" onclick="Editor.saveChar()">保存</button>
+      <button class="btn btn-primary" style="flex:2;" onclick="Editor.saveAndGo()">保存して編成へ</button>
     </div>
   </div>
 
@@ -555,8 +557,9 @@ body { display: flex; flex-direction: column; }
       <div class="section-title">SKILL TREE</div>
       <div class="skill-tree" id="skill-tree"></div>
       <div class="formation-actions">
+        <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="Formation.editChar()">✏️ 編集</button>
         <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="Formation.duplicateChar()">複製</button>
-        <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="Formation.toggleFavorite()">★お気に入り</button>
+        <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="Formation.toggleFavorite()">★</button>
         <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="Formation.deleteChar()">削除</button>
       </div>
     </div>
@@ -658,7 +661,7 @@ body { display: flex; flex-direction: column; }
   <div class="tab-btn active" data-screen="title" onclick="App.showScreen('title')">
     <span class="tab-icon">🏠</span><span>HOME</span>
   </div>
-  <div class="tab-btn" data-screen="editor" onclick="App.showScreen('editor')">
+  <div class="tab-btn" data-screen="editor" onclick="App.openEditor()">
     <span class="tab-icon">✏️</span><span>EDIT</span>
   </div>
   <div class="tab-btn" data-screen="formation" onclick="App.showScreen('formation')">
@@ -686,6 +689,17 @@ body { display: flex; flex-direction: column; }
 <!-- 装備モーダル -->
 <div id="equip-modal">
   <div class="equip-modal-box" id="equip-modal-content"></div>
+</div>
+
+<!-- 確認ダイアログ -->
+<div id="confirm-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:400;display:none;align-items:center;justify-content:center;">
+  <div style="background:var(--panel);border:1px solid var(--border2);border-radius:12px;padding:24px;width:80%;max-width:280px;text-align:center;">
+    <div id="confirm-msg" style="font-size:15px;color:var(--text);margin-bottom:20px;line-height:1.5;"></div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-secondary" style="flex:1;" onclick="App._confirmCancel()">キャンセル</button>
+      <button class="btn btn-primary" style="flex:1;" onclick="App._confirmOk()">削除する</button>
+    </div>
+  </div>
 </div>
 
 <!-- チュートリアル -->
@@ -721,7 +735,7 @@ const BALANCE = {
   maxPoints: 9999,
   shopRefreshCost: 50,
   evolveItemCost: 500,
-  skillUnlockLv: [0, 5, 10],
+  skillUnlockLv: [1, 5, 10],
   turnBonus: [[20, 2.0], [40, 1.5]],
   winStreakMax: 2.0,
   diffCoeff: [[5, 1.0], [15, 1.5]],
@@ -970,7 +984,33 @@ const App = {
     if (name === 'ranking') Ranking.render();
     if (name === 'shop') Shop.render();
   },
-  startGame() { this.showScreen('formation'); },
+  startGame() {
+    this.showScreen('formation');
+    setTimeout(() => App.toast('キャラを選択して「⚔ 出撃！」を押してください', 'var(--accent2)'), 300);
+  },
+  openEditor() {
+    const selectedChar = Formation.getSelected();
+    if (selectedChar) {
+      Editor.loadChar(selectedChar);
+    } else {
+      Editor.newChar();
+    }
+    this.showScreen('editor');
+  },
+  _confirmCb: null,
+  _showConfirm(msg, cb) {
+    this._confirmCb = cb;
+    document.getElementById('confirm-msg').textContent = msg;
+    document.getElementById('confirm-overlay').style.display = 'flex';
+  },
+  _confirmOk() {
+    document.getElementById('confirm-overlay').style.display = 'none';
+    if (this._confirmCb) { this._confirmCb(); this._confirmCb = null; }
+  },
+  _confirmCancel() {
+    document.getElementById('confirm-overlay').style.display = 'none';
+    this._confirmCb = null;
+  },
   showError(msg) {
     const el = document.getElementById('toast');
     el.textContent = '⚠ ' + msg;
@@ -1216,6 +1256,22 @@ const Editor = {
     this._updatePreview();
   },
 
+  saveAndGo() {
+    const pixels = [...this.pixels];
+    const filled = pixels.filter(c => c !== 'transparent').length;
+    if (filled === 0) { App.toast('何か描いてから保存してください', 'var(--accent)'); return; }
+    this.saveChar();
+    // 保存したキャラを編成で選択状態にする
+    const chars = Storage.getChars();
+    let name = document.getElementById('editor-name').value.trim();
+    if (!name) name = Utils.autoName(pixels);
+    const saved = this.editingId
+      ? chars.find(c => c.id === this.editingId)
+      : [...chars].reverse().find(c => c.name === name);
+    if (saved) Formation.selectedId = saved.id;
+    App.showScreen('formation');
+  },
+
   saveChar() {
     const pixels = [...this.pixels];
     const filled = pixels.filter(c => c !== 'transparent').length;
@@ -1372,11 +1428,12 @@ const Formation = {
     ];
     equipEl.innerHTML = slots.map(s => {
       const eq = char.equip[s.key];
+      const emptyStyle = 'opacity:0.4;';
       return `<div class="equip-slot" onclick="Formation.openEquipModal('${s.key}')">
-        <div style="font-size:20px;">${s.label.split(' ')[0]}</div>
+        <div style="font-size:20px;${eq ? '' : emptyStyle}">${s.label.split(' ')[0]}</div>
         ${eq ? `<div class="equip-name ${eq.rarity === 'ultra' ? 'rarity-ultra' : eq.rarity === 'rare' ? 'rarity-rare' : 'rarity-normal'}">${eq.name}</div>
           <div style="font-size:10px;color:var(--text3)">${eq.effect}</div>`
-          : `<div style="font-size:11px;">${s.label.split(' ')[1]}</div>`}
+          : `<div style="font-size:11px;${emptyStyle}color:var(--text3);">${s.label.split(' ')[1]}</div>`}
       </div>`;
     }).join('');
 
@@ -1384,12 +1441,12 @@ const Formation = {
     const skillEl = document.getElementById('skill-tree');
     const skills = Utils.getSkills(char.stats);
     skillEl.innerHTML = skills.map((sk, i) => {
-      const unlocked = char.unlockedSkills.includes(i);
       const reqLv = BALANCE.skillUnlockLv[i];
+      const unlocked = char.level >= reqLv;
       return `<div class="skill-node ${unlocked ? 'unlocked' : 'locked'}">
         <div style="font-size:16px;">${i===0?'⚡':i===1?'💥':'🌟'}</div>
         <div>${sk.name}</div>
-        ${!unlocked ? `<div style="font-size:10px;color:var(--text3)">Lv${reqLv}</div>` : ''}
+        ${!unlocked ? `<div style="font-size:10px;color:var(--text3)">Lv${reqLv}で解放</div>` : '<div style="font-size:10px;color:var(--accent3)">解放済</div>'}
       </div>`;
     }).join('');
   },
@@ -1468,6 +1525,13 @@ const Formation = {
     App.toast('外しました');
   },
 
+  editChar() {
+    const char = this.getSelected();
+    if (!char) { App.toast('キャラを選択してください', 'var(--accent)'); return; }
+    Editor.loadChar(char);
+    App.showScreen('editor');
+  },
+
   duplicateChar() {
     const char = this.getSelected();
     if (!char) return;
@@ -1503,19 +1567,24 @@ const Formation = {
   deleteChar() {
     const chars = Storage.getChars();
     const char = chars.find(c => c.id === this.selectedId);
-    if (!char) return;
+    if (!char) { App.toast('キャラを選択してください', 'var(--accent)'); return; }
     if (char.favorite) { App.toast('お気に入りのキャラは削除できません', 'var(--accent)'); return; }
     if (chars.length <= 1) { App.toast('最後のキャラは削除できません', 'var(--accent)'); return; }
     if (Battle.isActive && Battle.playerCharId === this.selectedId) {
       App.toast('出撃中のキャラは削除できません', 'var(--accent)'); return;
     }
-    if (!confirm(`「${char.name}」を削除しますか？`)) return;
-    const idx = chars.indexOf(char);
-    chars.splice(idx, 1);
-    Storage.saveChars(chars);
-    this.selectedId = null;
-    App.toast('削除しました');
-    this.render();
+    // 削除確認ダイアログ
+    Formation._pendingDelete = this.selectedId;
+    App._showConfirm(`「${char.name}」を削除しますか？`, () => {
+      const cs = Storage.getChars();
+      const target = cs.find(c => c.id === Formation._pendingDelete);
+      if (!target) return;
+      cs.splice(cs.indexOf(target), 1);
+      Storage.saveChars(cs);
+      Formation.selectedId = null;
+      App.toast('削除しました');
+      Formation.render();
+    });
   },
 };
 
@@ -2139,9 +2208,8 @@ const Battle = {
     const player = state.player;
     const sk = player.skills[idx];
     if (!sk) return;
-    if (!player.unlockedSkills) return;
     const char = Storage.getChars().find(c => c.id === this.playerCharId);
-    if (!char || !char.unlockedSkills.includes(idx)) return;
+    if (!char || char.level < BALANCE.skillUnlockLv[idx]) return;
     if (player.skillCd[idx] > 0) return;
     if (player.sp < sk.spCost && player.nocost === 0) return;
     this._doSkill(player, state.enemy, idx, false);
@@ -2176,15 +2244,19 @@ const Battle = {
       const sk = s.player.skills[i];
       const btn = document.createElement('div');
       btn.className = 'skill-btn';
-      const unlocked = char && char.unlockedSkills.includes(i);
+      const unlocked = char && char.level >= BALANCE.skillUnlockLv[i];
       if (!sk || !unlocked) {
         btn.classList.add('locked-skill');
-        btn.innerHTML = `<span style="font-size:18px;">🔒</span><span>${sk?sk.name:'???'}</span>`;
+        const reqLv = BALANCE.skillUnlockLv[i];
+        btn.innerHTML = `<span style="font-size:18px;">🔒</span><span>${sk ? sk.name : '???'}</span><span style="font-size:10px;color:var(--text3)">Lv${reqLv}</span>`;
       } else {
         const ready = s.player.sp >= sk.spCost && s.player.skillCd[i] === 0;
         if (ready) btn.classList.add('ready');
-        if (s.player.skillCd[i] > 0) { btn.classList.add('cooldown'); btn.innerHTML += `<span class="cd-text">${s.player.skillCd[i]}</span>`; }
-        btn.innerHTML += `<span style="font-size:16px;">${i===0?'⚡':i===1?'💥':'🌟'}</span><span>${sk.name}</span><span style="font-size:10px;color:var(--sp-color)">SP:${sk.spCost}</span>`;
+        if (s.player.skillCd[i] > 0) btn.classList.add('cooldown');
+        btn.innerHTML = `${s.player.skillCd[i] > 0 ? `<span class="cd-text">${s.player.skillCd[i]}</span>` : ''}
+          <span style="font-size:16px;">${i===0?'⚡':i===1?'💥':'🌟'}</span>
+          <span>${sk.name}</span>
+          <span style="font-size:10px;color:var(--sp-color)">SP:${sk.spCost}</span>`;
         btn.onclick = () => this.activateSkill(i);
       }
       el.appendChild(btn);
