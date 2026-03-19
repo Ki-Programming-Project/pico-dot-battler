@@ -9,6 +9,7 @@
   v0.1.3 - 2026-03-19 : バグ修正（敵撃破後の次の敵生成時クラッシュ）
   v0.1.4 - 2026-03-19 : meta警告修正（mobile-web-app-capable追加）
   v0.1.5 - 2026-03-19 : バグ修正（残機2重減算・敗北落下アニメーション実装）
+  v0.1.6 - 2026-03-19 : バグ修正（敗北時スコアゼロ・ランキング未登録）
 -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -917,10 +918,13 @@ const Utils = {
   expToLevel(lv) { return lv * 30 + 50; },
   // スコア計算
   calcScore(kills, remainHpRate, turns, winStreak) {
+    if (kills === 0) return 0;
     let tBonus = 1.0;
     for (const [t, b] of BALANCE.turnBonus) { if (turns <= t) { tBonus = b; break; } }
     const streakMult = Math.min(BALANCE.winStreakMax, 1.0 + winStreak * 0.1);
-    return Math.round(kills * remainHpRate * tBonus * streakMult);
+    // 撃破ボーナス：HP0でも撃破数分の点数を保証
+    const killBonus = kills * 10;
+    return Math.round((kills * remainHpRate + killBonus) * tBonus * streakMult);
   },
 };
 
@@ -2199,8 +2203,8 @@ const Battle = {
     const hpRate = Math.round((this._state.player.hp / this._state.player.maxHp) * 100);
     const score = Utils.calcScore(this._state.kills, hpRate, this._state.turn, this._winStreak);
 
-    // ランキング登録
-    if (result === 'win' && score > 0) this._saveRanking(score, char);
+    // ランキング登録（勝敗問わず撃破数1以上）
+    if (score > 0 && this._state.kills > 0) this._saveRanking(score, char);
 
     // リザルト表示
     setTimeout(() => {
