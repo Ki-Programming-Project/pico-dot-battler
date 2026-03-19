@@ -6,6 +6,7 @@
   v0.1.0 - 2026-03-19 : 初期実装
   v0.1.1 - 2026-03-19 : バグ修正（START遷移・削除・編集・装備表示・スキルツリー）
   v0.1.2 - 2026-03-19 : UI改善（タブバー差し替え・ボタンアイコン化）
+  v0.1.3 - 2026-03-19 : バグ修正（敵撃破後の次の敵生成時クラッシュ）
 -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -1940,7 +1941,21 @@ const Battle = {
     // HP0チェック
     if (state.enemy.hp <= 0 && !state.over) {
       state.kills++;
-      state.enemy = this._generateEnemy(this._battleCount + state.kills);
+      const nextEnemy = this._generateEnemy(this._battleCount + state.kills);
+      const eStats = { ...nextEnemy.stats };
+      if (stage.bonusStat && stage.bonusVal) {
+        eStats[stage.bonusStat] = Math.round(eStats[stage.bonusStat] * (1 + stage.bonusVal));
+      }
+      state.enemy = {
+        ...nextEnemy,
+        stats: eStats,
+        hp: eStats.hp, maxHp: eStats.hp,
+        sp: 0, maxSp: 10,
+        defBuff: 0, invincible: 0, evade: 0, allBuff: 0, nocost: 0,
+        skills: Utils.getSkills(eStats),
+        skillCd: [0, 0, 0],
+        enhanced: false,
+      };
       this._renderBars();
       Audio.play('victory');
     }
