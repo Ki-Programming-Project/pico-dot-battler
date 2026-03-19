@@ -8,6 +8,7 @@
   v0.1.2 - 2026-03-19 : UI改善（タブバー差し替え・ボタンアイコン化）
   v0.1.3 - 2026-03-19 : バグ修正（敵撃破後の次の敵生成時クラッシュ）
   v0.1.4 - 2026-03-19 : meta警告修正（mobile-web-app-capable追加）
+  v0.1.5 - 2026-03-19 : バグ修正（残機2重減算・敗北落下アニメーション実装）
 -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -1818,12 +1819,16 @@ const Battle = {
     // 敵（左側）
     const eX = W * 0.25 - actualSize / 2 + (opts.enemySlide || 0);
     const eY = yOffset + idleOffset + (opts.enemyFall || 0);
+    ctx.globalAlpha = opts.enemyOpacity !== undefined ? opts.enemyOpacity : 1;
     this._drawCharOnCtx(ctx, state.enemy.pixels, eX, eY, dotSize);
 
     // プレイヤー（右側）
     const pX = W * 0.75 - actualSize / 2 + (opts.playerSlide || 0);
     const pY = yOffset + idleOffset + (opts.playerFall || 0);
+    ctx.globalAlpha = opts.playerOpacity !== undefined ? opts.playerOpacity : 1;
     this._drawCharOnCtx(ctx, state.player.pixels, pX, pY, dotSize);
+
+    ctx.globalAlpha = 1;
   },
 
   _drawCharOnCtx(ctx, pixels, x, y, dotSize) {
@@ -2090,20 +2095,43 @@ const Battle = {
     const chars = Storage.getChars();
     const char = chars.find(c => c.id === this.playerCharId);
     if (char) {
-      char._battleLives = (char._battleLives || BALANCE.lifeCount) - 1;
-      if (char._battleLives <= 0) {
-        char._battleLives = 0;
-        Storage.saveChars(chars);
-        this._endBattle('lose');
-        return;
-      }
+      if (char._battleLives === undefined) char._battleLives = BALANCE.lifeCount;
       char._battleLives--;
       Storage.saveChars(chars);
+      if (char._battleLives <= 0) {
+        char._battleLives = 0;
+        this._playDefeatAnim(() => this._endBattle('lose'));
+        return;
+      }
     }
-    this._state.player.hp = this._state.player.maxHp;
-    this._renderLives();
-    Audio.play('damage');
-    App.toast('残機−1！', 'var(--accent)');
+    this._playDefeatAnim(() => {
+      this._state.player.hp = this._state.player.maxHp;
+      this._renderBars();
+      this._renderLives();
+      Audio.play('damage');
+      App.toast('残機−1！', 'var(--accent)');
+    });
+  },
+
+  // 敗北演出：プレイヤーキャラが落下→コールバック
+  _playDefeatAnim(cb) {
+    this._stopLoop();
+    const duration = 500; // ms
+    const start = performance.now();
+    const animate = (now) => {
+      const elapsed = now - start;
+      const progress = Math.min(1, elapsed / duration);
+      const fallY = progress * 80;
+      const opacity = 1 - progress;
+      this._drawBattle({ playerFall: fallY, playerOpacity: opacity });
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        Audio.play('defeat');
+        setTimeout(cb, 300);
+      }
+    };
+    requestAnimationFrame(animate);
   },
 
   _endBattle(result) {
