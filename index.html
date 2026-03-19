@@ -5,6 +5,7 @@
   Pico Dot Battler
   v0.1.0 - 2026-03-19 : 初期実装
   v0.1.1 - 2026-03-19 : バグ修正（START遷移・削除・編集・装備表示・スキルツリー）
+  v0.1.2 - 2026-03-19 : UI改善（タブバー差し替え・ボタンアイコン化）
 -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -519,11 +520,11 @@ body { display: flex; flex-direction: column; }
       <canvas id="editor-canvas"></canvas>
     </div>
     <div class="editor-tools">
-      <div class="tool-btn active" id="tool-pen" onclick="Editor.setTool('pen')">✏️ ペン</div>
-      <div class="tool-btn" id="tool-eraser" onclick="Editor.setTool('eraser')">🧹 消し</div>
-      <div class="tool-btn" id="tool-fill" onclick="Editor.setTool('fill')">🪣 塗り</div>
-      <div class="tool-btn" onclick="Editor.undo()">↩ 戻す</div>
-      <div class="tool-btn" onclick="Editor.clear()">🗑 消去</div>
+      <div class="tool-btn active" id="tool-pen" onclick="Editor.setTool('pen')" title="ペン">✏️</div>
+      <div class="tool-btn" id="tool-eraser" onclick="Editor.setTool('eraser')" title="消しゴム">⬜</div>
+      <div class="tool-btn" id="tool-fill" onclick="Editor.setTool('fill')" title="塗りつぶし">🪣</div>
+      <div class="tool-btn" onclick="Editor.undo()" title="元に戻す">↩</div>
+      <div class="tool-btn" onclick="Editor.clear()" title="全消去">🗑</div>
     </div>
     <div class="palette-wrap">
       <div class="palette-label">カラーパレット</div>
@@ -557,10 +558,10 @@ body { display: flex; flex-direction: column; }
       <div class="section-title">SKILL TREE</div>
       <div class="skill-tree" id="skill-tree"></div>
       <div class="formation-actions">
-        <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="Formation.editChar()">✏️ 編集</button>
-        <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="Formation.duplicateChar()">複製</button>
-        <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="Formation.toggleFavorite()">★</button>
-        <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="Formation.deleteChar()">削除</button>
+        <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="Formation.editChar()" title="編集">✏️</button>
+        <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="Formation.duplicateChar()" title="複製">🔁</button>
+        <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="Formation.toggleFavorite()" title="お気に入り">★</button>
+        <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="Formation.deleteChar()" title="削除">🗑</button>
       </div>
     </div>
     <button class="btn btn-primary" id="battle-start-btn" onclick="Battle.start()" style="margin-top:auto;">⚔ 出撃！</button>
@@ -658,19 +659,19 @@ body { display: flex; flex-direction: column; }
 
 <!-- タブバー -->
 <div id="tabbar">
-  <div class="tab-btn active" data-screen="title" onclick="App.showScreen('title')">
+  <div class="tab-btn active" id="tab-title" data-screen="title" onclick="App.showScreen('title')">
     <span class="tab-icon">🏠</span><span>HOME</span>
   </div>
-  <div class="tab-btn" data-screen="editor" onclick="App.openEditor()">
+  <div class="tab-btn" id="tab-editor" data-screen="editor" onclick="App.openEditor()">
     <span class="tab-icon">✏️</span><span>EDIT</span>
   </div>
-  <div class="tab-btn" data-screen="formation" onclick="App.showScreen('formation')">
+  <div class="tab-btn" id="tab-formation" data-screen="formation" onclick="App.showScreen('formation')">
     <span class="tab-icon">👥</span><span>TEAM</span>
   </div>
-  <div class="tab-btn" data-screen="ranking" onclick="App.showScreen('ranking')">
+  <div class="tab-btn" id="tab-ranking" data-screen="ranking" onclick="App.showScreen('ranking')">
     <span class="tab-icon">🏆</span><span>RANK</span>
   </div>
-  <div class="tab-btn" data-screen="shop" onclick="App.showScreen('shop')">
+  <div class="tab-btn" id="tab-shop" data-screen="shop" onclick="App.showScreen('shop')">
     <span class="tab-icon">🛒</span><span>SHOP</span>
   </div>
 </div>
@@ -974,15 +975,60 @@ const App = {
     const el = document.getElementById('screen-' + name);
     if (el) el.classList.add('active');
     this.currentScreen = name;
-    // タブ更新
+
+    // タブアクティブ状態
     document.querySelectorAll('.tab-btn').forEach(t => {
       t.classList.toggle('active', t.dataset.screen === name);
+      t.classList.remove('disabled');
     });
+
+    // EDIT画面：EDITタブ→保存ボタンに差し替え / 他タブグレーアウト
+    const tabEditor = document.getElementById('tab-editor');
+    const tabFormation = document.getElementById('tab-formation');
+    if (name === 'editor') {
+      tabEditor.innerHTML = '<span class="tab-icon">💾</span><span>保存</span>';
+      tabEditor.onclick = () => Editor.saveAndGo();
+      tabEditor.classList.add('active');
+      tabEditor.classList.remove('disabled');
+      ['tab-title','tab-ranking','tab-shop'].forEach(id => {
+        document.getElementById(id).classList.add('disabled');
+      });
+      tabFormation.classList.remove('disabled');
+      tabFormation.innerHTML = '<span class="tab-icon">👥</span><span>TEAM</span>';
+      tabFormation.onclick = () => App.showScreen('formation');
+    } else {
+      // EDIT以外：EDITタブを元に戻す
+      tabEditor.innerHTML = '<span class="tab-icon">✏️</span><span>EDIT</span>';
+      tabEditor.onclick = () => App.openEditor();
+    }
+
+    // FORMATION画面：TEAMタブ→出撃ボタンに差し替え
+    if (name === 'formation') {
+      tabFormation.innerHTML = '<span class="tab-icon">⚔️</span><span>出撃！</span>';
+      tabFormation.onclick = () => Battle.start();
+      tabFormation.classList.add('active');
+      this._updateBattleTab();
+    } else {
+      // FORMATION以外：TEAMタブを元に戻す
+      if (name !== 'editor') {
+        tabFormation.innerHTML = '<span class="tab-icon">👥</span><span>TEAM</span>';
+        tabFormation.onclick = () => App.showScreen('formation');
+      }
+    }
+
     // 画面別初期化
     if (name === 'editor') Editor.refresh();
-    if (name === 'formation') Formation.render();
+    if (name === 'formation') { Formation.render(); this._updateBattleTab(); }
     if (name === 'ranking') Ranking.render();
     if (name === 'shop') Shop.render();
+  },
+
+  // 出撃タブのグレーアウト制御（キャラ未選択時）
+  _updateBattleTab() {
+    const tabFormation = document.getElementById('tab-formation');
+    if (!tabFormation) return;
+    const hasSelected = !!Formation.selectedId;
+    tabFormation.classList.toggle('disabled', !hasSelected);
   },
   startGame() {
     this.showScreen('formation');
@@ -1375,8 +1421,8 @@ const Formation = {
     if (this.selectedId) this._renderDetail();
     else document.getElementById('formation-detail').style.display = 'none';
 
-    // 出撃ボタン
-    document.getElementById('battle-start-btn').disabled = !this.selectedId;
+    // 出撃タブ状態更新
+    App._updateBattleTab();
   },
 
   _getSorted() {
